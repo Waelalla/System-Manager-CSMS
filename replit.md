@@ -2,6 +2,8 @@
 
 ## Overview
 
+CSMS — Customer Service Management System. A full-stack Arabic/English web app with dark mode, RTL support, JWT auth, complaints lifecycle management, invoice follow-ups, analytics, CSV import, and role-based access control.
+
 pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
 
 ## Stack
@@ -14,83 +16,115 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **Database**: PostgreSQL + Drizzle ORM
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
-- **Build**: esbuild (CJS bundle)
+- **Frontend**: React + Vite + Shadcn UI + Tailwind CSS
+- **State management**: TanStack React Query
+- **Animations**: Framer Motion
+- **Charts**: Recharts
+- **Auth**: JWT (access token 15m, refresh token 7d)
+
+## Default User
+
+- **Email**: wael@system.com
+- **Password**: 123
+- **Role**: Manager
 
 ## Structure
 
 ```text
 artifacts-monorepo/
-├── artifacts/              # Deployable applications
-│   └── api-server/         # Express API server
-├── lib/                    # Shared libraries
+├── artifacts/
+│   ├── api-server/         # Express API server (port 8080)
+│   └── csms/               # React+Vite frontend (previewPath: /)
+├── lib/
 │   ├── api-spec/           # OpenAPI spec + Orval codegen config
 │   ├── api-client-react/   # Generated React Query hooks
 │   ├── api-zod/            # Generated Zod schemas from OpenAPI
 │   └── db/                 # Drizzle ORM schema + DB connection
-├── scripts/                # Utility scripts (single workspace package)
-│   └── src/                # Individual .ts scripts, run via `pnpm --filter @workspace/scripts run <script>`
-├── pnpm-workspace.yaml     # pnpm workspace (artifacts/*, lib/*, lib/integrations/*, scripts)
-├── tsconfig.base.json      # Shared TS options (composite, bundler resolution, es2022)
-├── tsconfig.json           # Root TS project references
-└── package.json            # Root package with hoisted devDeps
+├── pnpm-workspace.yaml
+├── tsconfig.base.json
+├── tsconfig.json
+└── package.json
 ```
+
+## Database Schema (15 tables)
+
+- `roles` — 5 roles: Customer Service Agent, Accountant, Manager, Manager/Voter, Maintenance Engineer
+- `users` — staff accounts (bcrypt passwords)
+- `branches` — company branches with governorate
+- `products` — product catalog with categories
+- `customers` — customer profiles with code generation (CUST-YYYYMMDD-XXXX)
+- `invoices` — invoice records linked to customers and products
+- `complaint_types` — dynamic complaint types with custom fields
+- `complaints` — complaints with status lifecycle: جديدة → مستلمة → قيد الحل → محلول → مغلق
+- `complaint_logs` — audit trail for every complaint action
+- `feedback` — customer satisfaction ratings
+- `follow_ups` — invoice follow-up tracking
+- `branch_change_logs` — tracks customer branch transfers
+- `import_logs` — CSV import history
+- `settings` — key-value system settings
+- `notifications` — polling-based notifications per user
+
+## API Routes (all under /api prefix, JWT required except /auth/login)
+
+- `POST /api/auth/login` — returns access_token + refresh_token + user
+- `POST /api/auth/refresh` — refresh token
+- `GET /api/auth/profile` — current user profile
+- `GET/POST /api/users` — user management
+- `GET/POST/PUT/DELETE /api/roles` — role management
+- `GET/POST/PUT/DELETE /api/branches` — branch management
+- `GET/POST/PUT/DELETE /api/products` — product catalog
+- `GET/POST/PUT/DELETE /api/customers` — customer CRUD with search/filter
+- `GET/POST /api/invoices` — invoice management
+- `GET/POST/PUT/DELETE /api/complaint-types` — complaint type management
+- `GET/POST /api/complaints` — complaints with filters
+- `GET /api/complaints/:id` — complaint detail with logs + feedback
+- `PUT /api/complaints/:id/status` — update complaint status
+- `POST /api/complaints/:id/transfer` — transfer complaint to user
+- `POST /api/complaints/:id/escalate` — escalate complaint
+- `POST /api/complaints/:id/feedback` — add customer feedback
+- `GET/POST /api/follow-ups` — invoice follow-up tracking
+- `POST /api/import/csv` — bulk CSV import (customers or customers+invoices)
+- `GET /api/import-logs` — import history
+- `GET /api/notifications` — user notifications (with unread_only param)
+- `POST /api/notifications/:id/read` — mark notification read
+- `POST /api/notifications/read-all` — mark all read
+- `GET /api/analytics/dashboard` — KPI dashboard stats
+- `GET/PUT /api/settings` — system settings
+- `GET /api/branch-change-logs` — branch transfer history
+
+## Frontend Pages
+
+- `/login` — Auth page (pre-filled with default credentials)
+- `/` — Dashboard with KPI cards and trend chart
+- `/customers` — Customer management with search, pagination, add dialog
+- `/complaints` — Complaints list with status badges
+- `/complaints/:id` — Complaint detail with logs and actions
+- `/analytics` — Analytics charts (by status, priority, type, branch, agent)
+- `/settings` — System settings
+- `/copyright` — Copyright standalone page
+
+## Key Features
+
+- **Arabic RTL default** — language toggle in header switches to English LTR
+- **Dark mode default** — toggle in header
+- **JWT auth** — stored in localStorage, injected via `setAuthTokenGetter`
+- **Fixed footer** — "© جميع حقوق الطباعة والنشر محفوظة | المطور: Wael Kadous | 01515196224" with Facebook link
+- **CSV import** — two modes: customers_only or customers_and_invoices; deduplication by name+phone
+- **Notifications** — polling-based, unread badge in header bell
 
 ## TypeScript & Composite Projects
 
-Every package extends `tsconfig.base.json` which sets `composite: true`. The root `tsconfig.json` lists all packages as project references. This means:
+Every package extends `tsconfig.base.json` which sets `composite: true`. The root `tsconfig.json` lists all packages as project references.
 
-- **Always typecheck from the root** — run `pnpm run typecheck` (which runs `tsc --build --emitDeclarationOnly`). This builds the full dependency graph so that cross-package imports resolve correctly. Running `tsc` inside a single package will fail if its dependencies haven't been built yet.
-- **`emitDeclarationOnly`** — we only emit `.d.ts` files during typecheck; actual JS bundling is handled by esbuild/tsx/vite...etc, not `tsc`.
-- **Project references** — when package A depends on package B, A's `tsconfig.json` must list B in its `references` array. `tsc --build` uses this to determine build order and skip up-to-date packages.
+- **Always typecheck from the root** — run `pnpm run typecheck`
+- **`emitDeclarationOnly`** — we only emit `.d.ts` files during typecheck
+- **Project references** — when package A depends on package B, A's `tsconfig.json` must list B in its `references` array
 
 ## Root Scripts
 
 - `pnpm run build` — runs `typecheck` first, then recursively runs `build` in all packages that define it
 - `pnpm run typecheck` — runs `tsc --build --emitDeclarationOnly` using project references
 
-## Packages
+## Seeding
 
-### `artifacts/api-server` (`@workspace/api-server`)
-
-Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` for request and response validation and `@workspace/db` for persistence.
-
-- Entry: `src/index.ts` — reads `PORT`, starts Express
-- App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`
-- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health` (full path: `/api/health`)
-- Depends on: `@workspace/db`, `@workspace/api-zod`
-- `pnpm --filter @workspace/api-server run dev` — run the dev server
-- `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)
-- Build bundles an allowlist of deps (express, cors, pg, drizzle-orm, zod, etc.) and externalizes the rest
-
-### `lib/db` (`@workspace/db`)
-
-Database layer using Drizzle ORM with PostgreSQL. Exports a Drizzle client instance and schema models.
-
-- `src/index.ts` — creates a `Pool` + Drizzle instance, exports schema
-- `src/schema/index.ts` — barrel re-export of all models
-- `src/schema/<modelname>.ts` — table definitions with `drizzle-zod` insert schemas (no models definitions exist right now)
-- `drizzle.config.ts` — Drizzle Kit config (requires `DATABASE_URL`, automatically provided by Replit)
-- Exports: `.` (pool, db, schema), `./schema` (schema only)
-
-Production migrations are handled by Replit when publishing. In development, we just use `pnpm --filter @workspace/db run push`, and we fallback to `pnpm --filter @workspace/db run push-force`.
-
-### `lib/api-spec` (`@workspace/api-spec`)
-
-Owns the OpenAPI 3.1 spec (`openapi.yaml`) and the Orval config (`orval.config.ts`). Running codegen produces output into two sibling packages:
-
-1. `lib/api-client-react/src/generated/` — React Query hooks + fetch client
-2. `lib/api-zod/src/generated/` — Zod schemas
-
-Run codegen: `pnpm --filter @workspace/api-spec run codegen`
-
-### `lib/api-zod` (`@workspace/api-zod`)
-
-Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used by `api-server` for response validation.
-
-### `lib/api-client-react` (`@workspace/api-client-react`)
-
-Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
-
-### `scripts` (`@workspace/scripts`)
-
-Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
+Run `pnpm --filter @workspace/db run seed` to seed default data (roles, branches, products, complaint types, settings, and user wael@system.com).

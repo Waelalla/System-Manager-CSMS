@@ -3,20 +3,52 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: CSMS API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication
+  - name: users
+    description: User management
+  - name: roles
+    description: Role management
+  - name: branches
+    description: Branch management
+  - name: products
+    description: Product management
+  - name: customers
+    description: Customer management
+  - name: invoices
+    description: Invoice management
+  - name: complaint-types
+    description: Complaint type management
+  - name: complaints
+    description: Complaint management
+  - name: follow-ups
+    description: Invoice follow-up
+  - name: analytics
+    description: Analytics and reports
+  - name: settings
+    description: System settings
+  - name: import
+    description: Data import
+  - name: branch-change-logs
+    description: Branch change logs
+  - name: import-logs
+    description: Import logs
+  - name: notifications
+    description: Notifications
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,7 +56,1159 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/refresh:
+    post:
+      operationId: refreshToken
+      tags: [auth]
+      summary: Refresh access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshTokenRequest"
+      responses:
+        "200":
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid refresh token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /auth/profile:
+    get:
+      operationId: getProfile
+      tags: [auth]
+      summary: Get current user profile
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Profile retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+    put:
+      operationId: updateProfile
+      tags: [auth]
+      summary: Update current user profile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileRequest"
+      responses:
+        "200":
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+
+  /auth/change-password:
+    post:
+      operationId: changePassword
+      tags: [auth]
+      summary: Change password
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "200":
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List all users
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/LimitParam"
+      responses:
+        "200":
+          description: Users list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsersListResponse"
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Create a user
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserItem"
+
+  /users/{id}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get a user by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: User retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserItem"
+    put:
+      operationId: updateUser
+      tags: [users]
+      summary: Update a user
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+      responses:
+        "200":
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserItem"
+    delete:
+      operationId: deleteUser
+      tags: [users]
+      summary: Delete a user
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: User deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /roles:
+    get:
+      operationId: listRoles
+      tags: [roles]
+      summary: List all roles
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Roles list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RolesListResponse"
+    post:
+      operationId: createRole
+      tags: [roles]
+      summary: Create a role
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRoleRequest"
+      responses:
+        "201":
+          description: Role created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoleItem"
+
+  /roles/{id}:
+    put:
+      operationId: updateRole
+      tags: [roles]
+      summary: Update a role
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRoleRequest"
+      responses:
+        "200":
+          description: Role updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoleItem"
+    delete:
+      operationId: deleteRole
+      tags: [roles]
+      summary: Delete a role
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Role deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /branches:
+    get:
+      operationId: listBranches
+      tags: [branches]
+      summary: List all branches
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Branches list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BranchesListResponse"
+    post:
+      operationId: createBranch
+      tags: [branches]
+      summary: Create a branch
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBranchRequest"
+      responses:
+        "201":
+          description: Branch created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BranchItem"
+
+  /branches/{id}:
+    put:
+      operationId: updateBranch
+      tags: [branches]
+      summary: Update a branch
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBranchRequest"
+      responses:
+        "200":
+          description: Branch updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BranchItem"
+    delete:
+      operationId: deleteBranch
+      tags: [branches]
+      summary: Delete a branch
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Branch deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /products:
+    get:
+      operationId: listProducts
+      tags: [products]
+      summary: List all products
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/LimitParam"
+      responses:
+        "200":
+          description: Products list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductsListResponse"
+    post:
+      operationId: createProduct
+      tags: [products]
+      summary: Create a product
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProductRequest"
+      responses:
+        "201":
+          description: Product created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductItem"
+
+  /products/{id}:
+    put:
+      operationId: updateProduct
+      tags: [products]
+      summary: Update a product
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProductRequest"
+      responses:
+        "200":
+          description: Product updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductItem"
+    delete:
+      operationId: deleteProduct
+      tags: [products]
+      summary: Delete a product
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Product deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /customers:
+    get:
+      operationId: listCustomers
+      tags: [customers]
+      summary: List customers with pagination and filters
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/LimitParam"
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: branch_id
+          in: query
+          schema:
+            type: integer
+        - name: type
+          in: query
+          schema:
+            type: string
+        - name: governorate
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Customers list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomersListResponse"
+    post:
+      operationId: createCustomer
+      tags: [customers]
+      summary: Create a customer
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCustomerRequest"
+      responses:
+        "201":
+          description: Customer created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerItem"
+
+  /customers/{id}:
+    get:
+      operationId: getCustomer
+      tags: [customers]
+      summary: Get a customer by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Customer retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerItem"
+    put:
+      operationId: updateCustomer
+      tags: [customers]
+      summary: Update a customer
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCustomerRequest"
+      responses:
+        "200":
+          description: Customer updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerItem"
+    delete:
+      operationId: deleteCustomer
+      tags: [customers]
+      summary: Delete a customer
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Customer deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /invoices:
+    get:
+      operationId: listInvoices
+      tags: [invoices]
+      summary: List invoices with pagination
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/LimitParam"
+        - name: customer_id
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: untracked_today
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Invoices list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoicesListResponse"
+    post:
+      operationId: createInvoice
+      tags: [invoices]
+      summary: Create an invoice
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInvoiceRequest"
+      responses:
+        "201":
+          description: Invoice created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceItem"
+
+  /complaint-types:
+    get:
+      operationId: listComplaintTypes
+      tags: [complaint-types]
+      summary: List all complaint types
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Complaint types list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComplaintTypesListResponse"
+    post:
+      operationId: createComplaintType
+      tags: [complaint-types]
+      summary: Create a complaint type
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateComplaintTypeRequest"
+      responses:
+        "201":
+          description: Complaint type created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComplaintTypeItem"
+
+  /complaint-types/{id}:
+    put:
+      operationId: updateComplaintType
+      tags: [complaint-types]
+      summary: Update a complaint type
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateComplaintTypeRequest"
+      responses:
+        "200":
+          description: Complaint type updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComplaintTypeItem"
+    delete:
+      operationId: deleteComplaintType
+      tags: [complaint-types]
+      summary: Delete a complaint type
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Complaint type deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /complaints:
+    get:
+      operationId: listComplaints
+      tags: [complaints]
+      summary: List complaints with filters
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/LimitParam"
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: type_id
+          in: query
+          schema:
+            type: integer
+        - name: priority
+          in: query
+          schema:
+            type: string
+        - name: assigned_to_id
+          in: query
+          schema:
+            type: integer
+        - name: customer_id
+          in: query
+          schema:
+            type: integer
+        - name: date_from
+          in: query
+          schema:
+            type: string
+        - name: date_to
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Complaints list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComplaintsListResponse"
+    post:
+      operationId: createComplaint
+      tags: [complaints]
+      summary: Create a complaint
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateComplaintRequest"
+      responses:
+        "201":
+          description: Complaint created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComplaintItem"
+
+  /complaints/{id}:
+    get:
+      operationId: getComplaint
+      tags: [complaints]
+      summary: Get complaint detail
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Complaint retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComplaintDetail"
+
+  /complaints/{id}/status:
+    put:
+      operationId: updateComplaintStatus
+      tags: [complaints]
+      summary: Update complaint status
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateComplaintStatusRequest"
+      responses:
+        "200":
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComplaintItem"
+
+  /complaints/{id}/transfer:
+    post:
+      operationId: transferComplaint
+      tags: [complaints]
+      summary: Transfer complaint to another user
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransferComplaintRequest"
+      responses:
+        "200":
+          description: Complaint transferred
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /complaints/{id}/escalate:
+    post:
+      operationId: escalateComplaint
+      tags: [complaints]
+      summary: Escalate complaint
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EscalateComplaintRequest"
+      responses:
+        "200":
+          description: Complaint escalated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /complaints/{id}/logs:
+    get:
+      operationId: getComplaintLogs
+      tags: [complaints]
+      summary: Get complaint activity logs
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Complaint logs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComplaintLogsListResponse"
+
+  /complaints/{id}/feedback:
+    post:
+      operationId: addComplaintFeedback
+      tags: [complaints]
+      summary: Add customer feedback to a complaint
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFeedbackRequest"
+      responses:
+        "201":
+          description: Feedback added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackItem"
+
+  /follow-ups:
+    get:
+      operationId: listFollowUps
+      tags: [follow-ups]
+      summary: List follow-ups
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/LimitParam"
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Follow-ups list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FollowUpsListResponse"
+    post:
+      operationId: createFollowUp
+      tags: [follow-ups]
+      summary: Create a follow-up
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFollowUpRequest"
+      responses:
+        "201":
+          description: Follow-up created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FollowUpItem"
+
+  /import/csv:
+    post:
+      operationId: importCsv
+      tags: [import]
+      summary: Import customers and/or invoices from CSV
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportCsvRequest"
+      responses:
+        "200":
+          description: Import result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportResult"
+
+  /import-logs:
+    get:
+      operationId: listImportLogs
+      tags: [import-logs]
+      summary: List import logs
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/LimitParam"
+      responses:
+        "200":
+          description: Import logs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportLogsListResponse"
+
+  /import-logs/{id}:
+    get:
+      operationId: getImportLog
+      tags: [import-logs]
+      summary: Get import log detail
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Import log detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportLogItem"
+
+  /branch-change-logs:
+    get:
+      operationId: listBranchChangeLogs
+      tags: [branch-change-logs]
+      summary: List branch change logs
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/LimitParam"
+      responses:
+        "200":
+          description: Branch change logs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BranchChangeLogsListResponse"
+
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [settings]
+      summary: Get all settings
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingsResponse"
+    put:
+      operationId: upsertSettings
+      tags: [settings]
+      summary: Update or insert settings
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertSettingsRequest"
+      responses:
+        "200":
+          description: Settings updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /notifications:
+    get:
+      operationId: listNotifications
+      tags: [notifications]
+      summary: List notifications for current user
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: unread_only
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Notifications list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationsListResponse"
+
+  /notifications/mark-read:
+    post:
+      operationId: markNotificationsRead
+      tags: [notifications]
+      summary: Mark notifications as read
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MarkReadRequest"
+      responses:
+        "200":
+          description: Notifications marked as read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /analytics/dashboard:
+    get:
+      operationId: getDashboardStats
+      tags: [analytics]
+      summary: Get dashboard KPI stats
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
+  /analytics/complaints:
+    get:
+      operationId: getComplaintAnalytics
+      tags: [analytics]
+      summary: Get complaint analytics
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: date_from
+          in: query
+          schema:
+            type: string
+        - name: date_to
+          in: query
+          schema:
+            type: string
+        - name: branch_id
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Complaint analytics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComplaintAnalytics"
+
+  /analytics/customers:
+    get:
+      operationId: getCustomerAnalytics
+      tags: [analytics]
+      summary: Get customer analytics
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Customer analytics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerAnalytics"
+
+  /analytics/invoices:
+    get:
+      operationId: getInvoiceAnalytics
+      tags: [analytics]
+      summary: Get invoice analytics
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Invoice analytics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceAnalytics"
+
+  /analytics/branches:
+    get:
+      operationId: getBranchAnalytics
+      tags: [analytics]
+      summary: Get branch analytics
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Branch analytics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BranchAnalytics"
+
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    IdParam:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 25
+
   schemas:
     HealthStatus:
       type: object
@@ -34,3 +1218,1076 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required:
+        - error
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+      required:
+        - success
+
+    PaginationMeta:
+      type: object
+      properties:
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+        totalPages:
+          type: integer
+      required:
+        - total
+        - page
+        - limit
+        - totalPages
+
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+      required:
+        - email
+        - password
+
+    RefreshTokenRequest:
+      type: object
+      properties:
+        refresh_token:
+          type: string
+      required:
+        - refresh_token
+
+    AuthResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        user:
+          $ref: "#/components/schemas/UserProfile"
+      required:
+        - access_token
+        - refresh_token
+        - user
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        role_id:
+          type: integer
+        role_name:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+      required:
+        - id
+        - name
+        - email
+        - role_id
+        - role_name
+        - permissions
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+
+    ChangePasswordRequest:
+      type: object
+      properties:
+        current_password:
+          type: string
+        new_password:
+          type: string
+      required:
+        - current_password
+        - new_password
+
+    UserItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        role_id:
+          type: integer
+        role_name:
+          type: string
+        created_at:
+          type: string
+      required:
+        - id
+        - name
+        - email
+        - role_id
+
+    UsersListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserItem"
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+      required:
+        - data
+        - meta
+
+    CreateUserRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+        role_id:
+          type: integer
+      required:
+        - name
+        - email
+        - password
+        - role_id
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+        role_id:
+          type: integer
+
+    RoleItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+      required:
+        - id
+        - name
+        - permissions
+
+    RolesListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/RoleItem"
+      required:
+        - data
+
+    CreateRoleRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+      required:
+        - name
+        - permissions
+
+    BranchItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        address:
+          type: string
+        governorate:
+          type: string
+        created_at:
+          type: string
+      required:
+        - id
+        - name
+        - governorate
+
+    BranchesListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/BranchItem"
+      required:
+        - data
+
+    CreateBranchRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        address:
+          type: string
+        governorate:
+          type: string
+      required:
+        - name
+        - governorate
+
+    ProductItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        category:
+          type: string
+        attributes:
+          type: object
+      required:
+        - id
+        - name
+        - category
+
+    ProductsListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductItem"
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+      required:
+        - data
+        - meta
+
+    CreateProductRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+        attributes:
+          type: object
+      required:
+        - name
+        - category
+
+    CustomerItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        code:
+          type: string
+        name:
+          type: string
+        phone:
+          type: string
+        type:
+          type: string
+        governorate:
+          type: string
+        branch_id:
+          type: integer
+        branch_name:
+          type: string
+        address:
+          type: string
+        invoice_count:
+          type: integer
+        last_invoice_date:
+          type: string
+      required:
+        - id
+        - code
+        - name
+        - phone
+        - type
+        - governorate
+        - branch_id
+
+    CustomersListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/CustomerItem"
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+      required:
+        - data
+        - meta
+
+    CreateCustomerRequest:
+      type: object
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        phone:
+          type: string
+        type:
+          type: string
+        governorate:
+          type: string
+        branch_id:
+          type: integer
+        address:
+          type: string
+      required:
+        - name
+        - phone
+        - type
+        - governorate
+        - branch_id
+
+    UpdateCustomerRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        type:
+          type: string
+        governorate:
+          type: string
+        branch_id:
+          type: integer
+        address:
+          type: string
+
+    InvoiceItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        invoice_number:
+          type: string
+        invoice_date:
+          type: string
+        amount:
+          type: string
+        status:
+          type: string
+        product_id:
+          type: integer
+        product_name:
+          type: string
+        customer_id:
+          type: integer
+        customer_name:
+          type: string
+        branch_name:
+          type: string
+        created_at:
+          type: string
+        has_follow_up:
+          type: boolean
+      required:
+        - id
+        - invoice_number
+        - invoice_date
+        - amount
+        - status
+        - customer_id
+
+    InvoicesListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceItem"
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+      required:
+        - data
+        - meta
+
+    CreateInvoiceRequest:
+      type: object
+      properties:
+        invoice_number:
+          type: string
+        invoice_date:
+          type: string
+        amount:
+          type: string
+        status:
+          type: string
+        product_id:
+          type: integer
+        customer_id:
+          type: integer
+      required:
+        - invoice_number
+        - invoice_date
+        - amount
+        - status
+        - customer_id
+
+    ComplaintTypeField:
+      type: object
+      properties:
+        name:
+          type: string
+        label:
+          type: string
+        type:
+          type: string
+          enum: [text, textarea, number, date, select, file, stars]
+        required:
+          type: boolean
+        options:
+          type: array
+          items:
+            type: string
+      required:
+        - name
+        - label
+        - type
+        - required
+
+    ComplaintTypeItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        fields:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComplaintTypeField"
+      required:
+        - id
+        - name
+        - fields
+
+    ComplaintTypesListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComplaintTypeItem"
+      required:
+        - data
+
+    CreateComplaintTypeRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        fields:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComplaintTypeField"
+      required:
+        - name
+        - fields
+
+    ComplaintItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        customer_id:
+          type: integer
+        customer_name:
+          type: string
+        customer_phone:
+          type: string
+        branch_name:
+          type: string
+        product_id:
+          type: integer
+        product_name:
+          type: string
+        invoice_id:
+          type: integer
+        invoice_number:
+          type: string
+        type_id:
+          type: integer
+        type_name:
+          type: string
+        channel:
+          type: string
+        priority:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+        assigned_to_id:
+          type: integer
+        assigned_to_name:
+          type: string
+        created_at:
+          type: string
+      required:
+        - id
+        - customer_id
+        - type_id
+        - channel
+        - priority
+        - description
+        - status
+
+    ComplaintDetail:
+      allOf:
+        - $ref: "#/components/schemas/ComplaintItem"
+        - type: object
+          properties:
+            fields_values:
+              type: object
+            images:
+              type: array
+              items:
+                type: string
+            logs:
+              type: array
+              items:
+                $ref: "#/components/schemas/ComplaintLogItem"
+            feedback:
+              $ref: "#/components/schemas/FeedbackItem"
+
+    ComplaintsListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComplaintItem"
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+      required:
+        - data
+        - meta
+
+    CreateComplaintRequest:
+      type: object
+      properties:
+        customer_id:
+          type: integer
+        product_id:
+          type: integer
+        invoice_id:
+          type: integer
+        type_id:
+          type: integer
+        fields_values:
+          type: object
+        channel:
+          type: string
+        priority:
+          type: string
+        description:
+          type: string
+        images:
+          type: array
+          items:
+            type: string
+      required:
+        - customer_id
+        - type_id
+        - channel
+        - priority
+        - description
+
+    UpdateComplaintStatusRequest:
+      type: object
+      properties:
+        status:
+          type: string
+        note:
+          type: string
+      required:
+        - status
+
+    TransferComplaintRequest:
+      type: object
+      properties:
+        target_user_id:
+          type: integer
+        note:
+          type: string
+      required:
+        - target_user_id
+
+    EscalateComplaintRequest:
+      type: object
+      properties:
+        note:
+          type: string
+
+    ComplaintLogItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        complaint_id:
+          type: integer
+        action:
+          type: string
+        user_id:
+          type: integer
+        user_name:
+          type: string
+        note:
+          type: string
+        timestamp:
+          type: string
+      required:
+        - id
+        - complaint_id
+        - action
+        - user_id
+        - timestamp
+
+    ComplaintLogsListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComplaintLogItem"
+      required:
+        - data
+
+    FeedbackItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        complaint_id:
+          type: integer
+        rating:
+          type: integer
+        comment:
+          type: string
+        created_at:
+          type: string
+      required:
+        - id
+        - complaint_id
+        - rating
+
+    CreateFeedbackRequest:
+      type: object
+      properties:
+        rating:
+          type: integer
+        comment:
+          type: string
+      required:
+        - rating
+
+    FollowUpItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        invoice_id:
+          type: integer
+        invoice_number:
+          type: string
+        customer_name:
+          type: string
+        branch_name:
+          type: string
+        assigned_user_id:
+          type: integer
+        assigned_user_name:
+          type: string
+        notes:
+          type: object
+        status:
+          type: string
+        created_at:
+          type: string
+      required:
+        - id
+        - invoice_id
+        - assigned_user_id
+        - status
+
+    FollowUpsListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/FollowUpItem"
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+      required:
+        - data
+        - meta
+
+    CreateFollowUpRequest:
+      type: object
+      properties:
+        invoice_ids:
+          type: array
+          items:
+            type: integer
+        notes:
+          type: object
+        assigned_user_id:
+          type: integer
+      required:
+        - invoice_ids
+        - assigned_user_id
+
+    ImportCsvRequest:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum: [customers_only, customers_and_invoices]
+        rows:
+          type: array
+          items:
+            type: object
+      required:
+        - mode
+        - rows
+
+    ImportResult:
+      type: object
+      properties:
+        log_id:
+          type: integer
+        total_rows:
+          type: integer
+        added_customers:
+          type: integer
+        updated_customers:
+          type: integer
+        added_invoices:
+          type: integer
+        duplicate_invoices:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: object
+        warnings:
+          type: array
+          items:
+            type: object
+      required:
+        - total_rows
+        - added_customers
+        - updated_customers
+
+    ImportLogItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: integer
+        user_name:
+          type: string
+        file_name:
+          type: string
+        total_rows:
+          type: integer
+        added_customers:
+          type: integer
+        updated_customers:
+          type: integer
+        added_invoices:
+          type: integer
+        duplicate_invoices:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: object
+        warnings:
+          type: array
+          items:
+            type: object
+        imported_at:
+          type: string
+      required:
+        - id
+        - user_id
+        - file_name
+        - total_rows
+
+    ImportLogsListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ImportLogItem"
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+      required:
+        - data
+        - meta
+
+    BranchChangeLogItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        customer_id:
+          type: integer
+        customer_code:
+          type: string
+        customer_name:
+          type: string
+        customer_phone:
+          type: string
+        old_branch_id:
+          type: integer
+        old_branch_name:
+          type: string
+        new_branch_id:
+          type: integer
+        new_branch_name:
+          type: string
+        changed_at:
+          type: string
+        notes:
+          type: string
+      required:
+        - id
+        - customer_id
+        - old_branch_id
+        - new_branch_id
+        - changed_at
+
+    BranchChangeLogsListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/BranchChangeLogItem"
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+      required:
+        - data
+        - meta
+
+    SettingsResponse:
+      type: object
+      properties:
+        data:
+          type: object
+      required:
+        - data
+
+    UpsertSettingsRequest:
+      type: object
+      properties:
+        settings:
+          type: object
+      required:
+        - settings
+
+    NotificationItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: integer
+        type:
+          type: string
+        title:
+          type: string
+        message:
+          type: string
+        link:
+          type: string
+        is_read:
+          type: boolean
+        created_at:
+          type: string
+      required:
+        - id
+        - user_id
+        - type
+        - title
+        - message
+        - is_read
+
+    NotificationsListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/NotificationItem"
+        unread_count:
+          type: integer
+      required:
+        - data
+        - unread_count
+
+    MarkReadRequest:
+      type: object
+      properties:
+        ids:
+          type: array
+          items:
+            type: integer
+        all:
+          type: boolean
+
+    DashboardStats:
+      type: object
+      properties:
+        complaints_new:
+          type: integer
+        complaints_received:
+          type: integer
+        complaints_closed:
+          type: integer
+        complaints_escalated:
+          type: integer
+        avg_resolution_hours:
+          type: number
+        avg_rating:
+          type: number
+        invoices_untracked:
+          type: integer
+        trend:
+          type: array
+          items:
+            type: object
+      required:
+        - complaints_new
+        - complaints_received
+        - complaints_closed
+
+    ComplaintAnalytics:
+      type: object
+      properties:
+        by_type:
+          type: array
+          items:
+            type: object
+        by_priority:
+          type: array
+          items:
+            type: object
+        avg_resolution_by_type:
+          type: array
+          items:
+            type: object
+        top_products:
+          type: array
+          items:
+            type: object
+      required:
+        - by_type
+
+    CustomerAnalytics:
+      type: object
+      properties:
+        top_by_purchase:
+          type: array
+          items:
+            type: object
+        by_complaints:
+          type: array
+          items:
+            type: object
+        branch_changes:
+          type: array
+          items:
+            type: object
+      required:
+        - top_by_purchase
+
+    InvoiceAnalytics:
+      type: object
+      properties:
+        untracked_count:
+          type: integer
+        avg_followup_days:
+          type: number
+        low_rated:
+          type: array
+          items:
+            type: object
+      required:
+        - untracked_count
+
+    BranchAnalytics:
+      type: object
+      properties:
+        branches:
+          type: array
+          items:
+            type: object
+      required:
+        - branches
+
+    HealthCheckResponse:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status

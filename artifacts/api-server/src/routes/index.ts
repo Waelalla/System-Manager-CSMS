@@ -1,8 +1,40 @@
 import { Router, type IRouter } from "express";
-import healthRouter from "./health";
+import healthRouter from "./health.js";
+import authRouter from "./auth.js";
+import usersRouter from "./users.js";
+import rolesRouter from "./roles.js";
+import branchesRouter from "./branches.js";
+import productsRouter from "./products.js";
+import customersRouter from "./customers.js";
+import invoicesRouter from "./invoices.js";
+import complaintTypesRouter from "./complaint_types.js";
+import complaintsRouter from "./complaints.js";
+import followUpsRouter from "./follow_ups.js";
+import importRouter from "./import.js";
+import importLogsRouter from "./import_logs.js";
+import notificationsRouter from "./notifications.js";
+import analyticsRouter from "./analytics.js";
+import settingsRouter from "./settings.js";
+import branchChangeLogsRouter from "./branch_change_logs.js";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use("/auth", authRouter);
+router.use("/users", usersRouter);
+router.use("/roles", rolesRouter);
+router.use("/branches", branchesRouter);
+router.use("/products", productsRouter);
+router.use("/customers", customersRouter);
+router.use("/invoices", invoicesRouter);
+router.use("/complaint-types", complaintTypesRouter);
+router.use("/complaints", complaintsRouter);
+router.use("/follow-ups", followUpsRouter);
+router.use("/import", importRouter);
+router.use("/import-logs", importLogsRouter);
+router.use("/notifications", notificationsRouter);
+router.use("/analytics", analyticsRouter);
+router.use("/settings", settingsRouter);
+router.use("/branch-change-logs", branchChangeLogsRouter);
 
 export default router;

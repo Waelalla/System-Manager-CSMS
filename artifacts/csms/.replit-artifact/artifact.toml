@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "CSMS - Customer Service Management System"
+version = "1.0.0"
+id = "artifacts/csms"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19122
+
+[services.development]
+run = "pnpm --filter @workspace/csms run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/csms", "run", "build" ]
+publicDir = "artifacts/csms/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19122"
+BASE_PATH = "/"

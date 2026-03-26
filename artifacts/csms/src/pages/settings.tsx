@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, Fragment } from 'react';
 import { useTranslation } from '@/lib/i18n';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,13 +6,15 @@ import { Input } from '@/components/ui/input';
 import {
   Save, Building2, Users, Tags, GitBranch, Upload,
   CheckCircle2, AlertCircle, Mail, Star, Palette, Shield,
-  Plus, Trash2, MapPin
+  Plus, Trash2, MapPin, Pencil, X, Eye, EyeOff,
 } from 'lucide-react';
 import {
   useGetSettings, useUpsertSettings,
   useListUsers, useListComplaintTypes, useListBranches,
   useCreateComplaintType, useDeleteComplaintType,
-  useCreateBranch, useDeleteBranch
+  useCreateBranch, useDeleteBranch,
+  useCreateUser, useUpdateUser, useDeleteUser,
+  useListRoles,
 } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
@@ -43,13 +45,17 @@ export default function Settings() {
   const { data: rawSettings } = useGetSettings();
   const settings = (rawSettings as unknown as SettingsRecord) ?? {};
   const { mutateAsync: upsert } = useUpsertSettings();
-  const { data: usersData } = useListUsers(undefined, { query: { queryKey: ['listUsers'], enabled: section === 'users' } });
+  const { data: usersData, refetch: refetchUsers } = useListUsers(undefined, { query: { queryKey: ['listUsers'], enabled: section === 'users' } });
+  const { data: rolesData } = useListRoles({ query: { queryKey: ['listRoles'] } });
   const { data: typesData } = useListComplaintTypes({ query: { queryKey: ['listComplaintTypes'] } });
   const { data: branchesData } = useListBranches({ query: { queryKey: ['listBranches'] } });
   const { mutateAsync: createType } = useCreateComplaintType();
   const { mutateAsync: deleteType } = useDeleteComplaintType();
   const { mutateAsync: createBranch } = useCreateBranch();
   const { mutateAsync: deleteBranch } = useDeleteBranch();
+  const { mutateAsync: createUser } = useCreateUser();
+  const { mutateAsync: updateUser } = useUpdateUser();
+  const { mutateAsync: deleteUser } = useDeleteUser();
 
   const [newTypeName, setNewTypeName] = useState('');
   const [newTypeDesc, setNewTypeDesc] = useState('');
@@ -58,6 +64,17 @@ export default function Settings() {
   const [newBranchName, setNewBranchName] = useState('');
   const [newBranchGov, setNewBranchGov] = useState('');
   const [newBranchAddress, setNewBranchAddress] = useState('');
+
+  type UserForm = { name: string; email: string; password: string; role_id: string };
+  const emptyUserForm: UserForm = { name: '', email: '', password: '', role_id: '' };
+  const [showAddUser, setShowAddUser] = useState(false);
+  const [newUserForm, setNewUserForm] = useState<UserForm>(emptyUserForm);
+  const [newUserPwdVisible, setNewUserPwdVisible] = useState(false);
+  const [addingUser, setAddingUser] = useState(false);
+  const [editingUserId, setEditingUserId] = useState<number | null>(null);
+  const [editUserForm, setEditUserForm] = useState<UserForm>(emptyUserForm);
+  const [editUserPwdVisible, setEditUserPwdVisible] = useState(false);
+  const [savingUser, setSavingUser] = useState(false);
   const [addingBranch, setAddingBranch] = useState(false);
 
   const handleAddType = async () => {
@@ -99,6 +116,56 @@ export default function Settings() {
       await deleteBranch({ id });
       queryClient.invalidateQueries({ queryKey: ['listBranches'] });
       toast({ title: 'تم الحذف' });
+    } catch { toast({ title: 'خطأ', description: 'فشل في الحذف', variant: 'destructive' }); }
+  };
+
+  const handleAddUser = async () => {
+    if (!newUserForm.name.trim() || !newUserForm.email.trim() || !newUserForm.password.trim() || !newUserForm.role_id) return;
+    setAddingUser(true);
+    try {
+      await createUser({ data: { name: newUserForm.name.trim(), email: newUserForm.email.trim(), password: newUserForm.password, role_id: Number(newUserForm.role_id) } });
+      queryClient.invalidateQueries({ queryKey: ['listUsers'] });
+      refetchUsers();
+      setNewUserForm(emptyUserForm);
+      setShowAddUser(false);
+      toast({ title: 'تم الإضافة', description: `تم إضافة المستخدم "${newUserForm.name}"` });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'فشل في إضافة المستخدم';
+      toast({ title: 'خطأ', description: msg, variant: 'destructive' });
+    } finally { setAddingUser(false); }
+  };
+
+  const startEditUser = (user: { id: number; name: string; email: string; role_id?: number }) => {
+    setEditingUserId(user.id);
+    setEditUserForm({ name: user.name, email: user.email, password: '', role_id: String(user.role_id ?? '') });
+    setEditUserPwdVisible(false);
+  };
+
+  const handleSaveUser = async () => {
+    if (!editingUserId || !editUserForm.name.trim() || !editUserForm.email.trim()) return;
+    setSavingUser(true);
+    try {
+      const data: Record<string, unknown> = { name: editUserForm.name.trim(), email: editUserForm.email.trim() };
+      if (editUserForm.role_id) data.role_id = Number(editUserForm.role_id);
+      if (editUserForm.password.trim()) data.password = editUserForm.password.trim();
+      await updateUser({ id: editingUserId, data: data as Parameters<typeof updateUser>[0]['data'] });
+      queryClient.invalidateQueries({ queryKey: ['listUsers'] });
+      refetchUsers();
+      setEditingUserId(null);
+      toast({ title: 'تم التعديل', description: 'تم تحديث بيانات المستخدم بنجاح' });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'فشل في التعديل';
+      toast({ title: 'خطأ', description: msg, variant: 'destructive' });
+    } finally { setSavingUser(false); }
+  };
+
+  const handleDeleteUser = async (id: number, name: string) => {
+    if (!confirm(`هل أنت متأكد من حذف المستخدم "${name}"؟ هذا الإجراء لا يمكن التراجع عنه.`)) return;
+    try {
+      await deleteUser({ id });
+      queryClient.invalidateQueries({ queryKey: ['listUsers'] });
+      refetchUsers();
+      toast({ title: 'تم الحذف', description: `تم حذف المستخدم "${name}"` });
     } catch { toast({ title: 'خطأ', description: 'فشل في الحذف', variant: 'destructive' }); }
   };
 
@@ -259,30 +326,182 @@ export default function Settings() {
 
             {section === 'users' && (
               <div className="space-y-4">
-                <h2 className="text-xl font-bold">إدارة المستخدمين</h2>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-bold">إدارة المستخدمين</h2>
+                    <p className="text-sm text-muted-foreground mt-0.5">{users.length} مستخدم مسجّل</p>
+                  </div>
+                  <Button
+                    onClick={() => { setShowAddUser(v => !v); setEditingUserId(null); }}
+                    className="rounded-xl h-10 bg-primary hover:bg-primary/90 text-white gap-2"
+                  >
+                    {showAddUser ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                    {showAddUser ? 'إلغاء' : 'إضافة مستخدم'}
+                  </Button>
+                </div>
+
+                {showAddUser && (
+                  <div className="bg-muted/20 rounded-xl p-5 border border-primary/20 space-y-4">
+                    <p className="text-sm font-semibold text-primary flex items-center gap-2">
+                      <Plus className="w-4 h-4" /> إضافة مستخدم جديد
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">الاسم الكامل *</label>
+                        <Input
+                          value={newUserForm.name}
+                          onChange={e => setNewUserForm(f => ({ ...f, name: e.target.value }))}
+                          placeholder="أحمد محمد"
+                          className="h-10 bg-background/60 rounded-xl"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">البريد الإلكتروني *</label>
+                        <Input
+                          value={newUserForm.email}
+                          onChange={e => setNewUserForm(f => ({ ...f, email: e.target.value }))}
+                          placeholder="ahmed@company.com"
+                          dir="ltr"
+                          className="h-10 bg-background/60 rounded-xl"
+                          type="email"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">كلمة المرور *</label>
+                        <div className="relative">
+                          <Input
+                            value={newUserForm.password}
+                            onChange={e => setNewUserForm(f => ({ ...f, password: e.target.value }))}
+                            placeholder="كلمة المرور"
+                            className="h-10 bg-background/60 rounded-xl pr-3 pl-10"
+                            type={newUserPwdVisible ? 'text' : 'password'}
+                            onKeyDown={e => { if (e.key === 'Enter') handleAddUser(); }}
+                          />
+                          <button type="button" onClick={() => setNewUserPwdVisible(v => !v)} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                            {newUserPwdVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">الدور *</label>
+                        <select
+                          value={newUserForm.role_id}
+                          onChange={e => setNewUserForm(f => ({ ...f, role_id: e.target.value }))}
+                          className="w-full h-10 bg-background/60 border border-input rounded-xl px-3 text-sm text-foreground"
+                        >
+                          <option value="">اختر دوراً...</option>
+                          {(rolesData as unknown as { data?: { id: number; name: string }[] })?.data?.map((r) => (
+                            <option key={r.id} value={r.id}>{r.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={handleAddUser}
+                      disabled={!newUserForm.name.trim() || !newUserForm.email.trim() || !newUserForm.password.trim() || !newUserForm.role_id || addingUser}
+                      className="rounded-xl h-10 bg-primary hover:bg-primary/90 text-white w-full"
+                    >
+                      {addingUser ? 'جاري الإضافة...' : 'إضافة المستخدم'}
+                    </Button>
+                  </div>
+                )}
+
                 <div className="rounded-xl border border-border/50 overflow-hidden">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/30">
                       <tr>
-                        <th className="text-right p-4 font-medium">الاسم</th>
-                        <th className="text-right p-4 font-medium">البريد</th>
-                        <th className="text-right p-4 font-medium">الدور</th>
-                        <th className="text-right p-4 font-medium">الحالة</th>
+                        <th className="text-right p-3 font-medium">الاسم</th>
+                        <th className="text-right p-3 font-medium">البريد</th>
+                        <th className="text-right p-3 font-medium">الدور</th>
+                        <th className="text-left p-3 font-medium w-28">إجراءات</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/30">
-                      {users.map((user: { id: number; name: string; email: string; role_name?: string; is_active?: boolean }) => (
-                        <tr key={user.id} className="hover:bg-muted/20">
-                          <td className="p-4 font-medium">{user.name}</td>
-                          <td className="p-4 text-muted-foreground dir-ltr">{user.email}</td>
-                          <td className="p-4">
-                            <span className="px-2 py-1 rounded-lg text-xs bg-primary/10 text-primary">{user.role_name ?? 'غير محدد'}</span>
-                          </td>
-                          <td className="p-4">
-                            <span className={`w-2 h-2 rounded-full inline-block ${user.is_active ? 'bg-green-500' : 'bg-muted-foreground'}`}></span>
-                          </td>
-                        </tr>
+                      {users.map((user: { id: number; name: string; email: string; role_name?: string; role_id?: number }) => (
+                        <Fragment key={user.id}>
+                          <tr className={`hover:bg-muted/20 transition-colors ${editingUserId === user.id ? 'bg-primary/5' : ''}`}>
+                            <td className="p-3 font-medium">{user.name}</td>
+                            <td className="p-3 text-muted-foreground text-xs" dir="ltr">{user.email}</td>
+                            <td className="p-3">
+                              <span className="px-2 py-1 rounded-lg text-xs bg-primary/10 text-primary">{user.role_name ?? 'غير محدد'}</span>
+                            </td>
+                            <td className="p-3">
+                              <div className="flex items-center gap-1 justify-end">
+                                <button
+                                  onClick={() => editingUserId === user.id ? setEditingUserId(null) : startEditUser(user)}
+                                  className="p-1.5 rounded-lg hover:bg-primary/10 text-primary transition-colors"
+                                  title="تعديل"
+                                >
+                                  {editingUserId === user.id ? <X className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteUser(user.id, user.name)}
+                                  className="p-1.5 rounded-lg hover:bg-red-500/10 text-red-400 transition-colors"
+                                  title="حذف"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                          {editingUserId === user.id && (
+                            <tr key={`edit-${user.id}`}>
+                              <td colSpan={4} className="p-0">
+                                <div className="bg-primary/5 border-t border-primary/10 p-4 space-y-3">
+                                  <p className="text-xs font-semibold text-primary flex items-center gap-1"><Pencil className="w-3 h-3" /> تعديل بيانات {user.name}</p>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-muted-foreground">الاسم الكامل</label>
+                                      <Input value={editUserForm.name} onChange={e => setEditUserForm(f => ({ ...f, name: e.target.value }))} className="h-9 bg-background/60 rounded-xl text-sm" placeholder="الاسم" />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-muted-foreground">البريد الإلكتروني</label>
+                                      <Input value={editUserForm.email} onChange={e => setEditUserForm(f => ({ ...f, email: e.target.value }))} className="h-9 bg-background/60 rounded-xl text-sm" dir="ltr" type="email" placeholder="البريد" />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-muted-foreground">كلمة المرور الجديدة (اتركها فارغة للإبقاء)</label>
+                                      <div className="relative">
+                                        <Input
+                                          value={editUserForm.password}
+                                          onChange={e => setEditUserForm(f => ({ ...f, password: e.target.value }))}
+                                          placeholder="كلمة مرور جديدة..."
+                                          className="h-9 bg-background/60 rounded-xl text-sm pr-3 pl-10"
+                                          type={editUserPwdVisible ? 'text' : 'password'}
+                                        />
+                                        <button type="button" onClick={() => setEditUserPwdVisible(v => !v)} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                                          {editUserPwdVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                        </button>
+                                      </div>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-muted-foreground">الدور</label>
+                                      <select
+                                        value={editUserForm.role_id}
+                                        onChange={e => setEditUserForm(f => ({ ...f, role_id: e.target.value }))}
+                                        className="w-full h-9 bg-background/60 border border-input rounded-xl px-3 text-sm text-foreground"
+                                      >
+                                        <option value="">اختر دوراً...</option>
+                                        {(rolesData as unknown as { data?: { id: number; name: string }[] })?.data?.map((r) => (
+                                          <option key={r.id} value={r.id}>{r.name}</option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                  </div>
+                                  <div className="flex gap-2 pt-1">
+                                    <Button onClick={handleSaveUser} disabled={savingUser} className="rounded-xl h-9 bg-primary hover:bg-primary/90 text-white text-xs px-5">
+                                      <Save className="w-3.5 h-3.5 mr-1" /> {savingUser ? 'جاري الحفظ...' : 'حفظ التعديلات'}
+                                    </Button>
+                                    <Button variant="outline" onClick={() => setEditingUserId(null)} className="rounded-xl h-9 text-xs px-4">إلغاء</Button>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
                       ))}
+                      {users.length === 0 && (
+                        <tr><td colSpan={4} className="p-8 text-center text-muted-foreground text-sm">لا يوجد مستخدمون</td></tr>
+                      )}
                     </tbody>
                   </table>
                 </div>

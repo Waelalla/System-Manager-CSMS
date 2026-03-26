@@ -25,13 +25,11 @@ export default function FollowUps() {
   const [ratingDialog, setRatingDialog] = useState<RatingDialogState | null>(null);
   const [ratingError, setRatingError] = useState('');
 
-  const { data, isLoading, refetch } = useListInvoices({ page, limit: 15 });
+  const { data, isLoading, refetch } = useListInvoices({ page, limit: 15, untracked_today: true });
   const { mutateAsync: createFollowUp } = useCreateFollowUp();
   const { data: complaintTypes } = useListComplaintTypes({ query: { queryKey: ['listComplaintTypes'] } });
 
-  const untrackedInvoices = data?.data?.filter(
-    (inv) => !(inv as { has_follow_up?: boolean }).has_follow_up
-  ) ?? [];
+  const untrackedInvoices = data?.data ?? [];
 
   const handleToggleSelect = (id: number) => {
     setSelected(prev =>

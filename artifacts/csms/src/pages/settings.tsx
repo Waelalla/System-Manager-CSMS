@@ -299,11 +299,16 @@ export default function Settings() {
                   </div>
                 )}
 
-                <div className="bg-muted/20 rounded-xl p-4">
-                  <p className="text-sm font-medium mb-2">تنسيق ملف CSV المطلوب (عملاء فقط)</p>
-                  <code className="text-xs text-muted-foreground block font-mono">اسم_العميل,رقم_الهاتف,المحافظة,النوع,الكود,العنوان</code>
-                  <p className="text-sm font-medium mb-2 mt-3">تنسيق ملف CSV (عملاء + فواتير)</p>
-                  <code className="text-xs text-muted-foreground block font-mono">اسم_العميل,رقم_الهاتف,المحافظة,النوع,الكود,رقم_الفاتورة,مبلغ_الفاتورة,حالة_الفاتورة</code>
+                <div className="bg-muted/20 rounded-xl p-4 space-y-3">
+                  <div>
+                    <p className="text-sm font-medium mb-1">تنسيق ملف CSV المطلوب (عملاء فقط)</p>
+                    <code className="text-xs text-muted-foreground block font-mono bg-background/50 px-2 py-1 rounded">code,name,phone,type,governorate,branch,address</code>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium mb-1">تنسيق ملف CSV (عملاء + فواتير)</p>
+                    <code className="text-xs text-muted-foreground block font-mono bg-background/50 px-2 py-1 rounded">code,name,phone,type,governorate,branch,address,invoice_number,invoice_date,invoice_amount,invoice_product,invoice_status</code>
+                  </div>
+                  <p className="text-xs text-muted-foreground">* الأعمدة بالإنجليزية كما هي موضحة أعلاه</p>
                 </div>
               </div>
             )}

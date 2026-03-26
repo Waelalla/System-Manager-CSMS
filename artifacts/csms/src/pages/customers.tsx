@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { useListCustomers, useCreateCustomer } from '@workspace/api-client-react';
+import { useListCustomers, useCreateCustomer, useListBranches } from '@workspace/api-client-react';
 import { useTranslation } from '@/lib/i18n';
 import { useQueryClient } from '@tanstack/react-query';
+import { useLocation } from 'wouter';
 import { Plus, Upload, Search, MoreHorizontal, Edit, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,10 +11,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 
 export default function Customers() {
   const { t } = useTranslation();
+  const [, navigate] = useLocation();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  const [branchId, setBranchId] = useState('');
   
-  const { data, isLoading } = useListCustomers({ page, limit: 10, search });
+  const { data, isLoading } = useListCustomers({ page, limit: 10, search, branch_id: branchId ? parseInt(branchId) : undefined });
+  const { data: branchesData } = useListBranches({ query: { queryKey: ['listBranchesCustomers'] } });
+  const branches = branchesData?.data ?? [];
 
   return (
     <div className="space-y-6">
@@ -24,7 +29,11 @@ export default function Customers() {
         </div>
         
         <div className="flex items-center gap-3">
-          <Button variant="outline" className="rounded-xl border-border/50 hover:bg-card hover:shadow-md transition-all">
+          <Button
+            variant="outline"
+            onClick={() => navigate('/settings')}
+            className="rounded-xl border-border/50 hover:bg-card hover:shadow-md transition-all"
+          >
             <Upload className="w-4 h-4 mr-2" />
             {t('customers.import')}
           </Button>
@@ -32,7 +41,6 @@ export default function Customers() {
         </div>
       </div>
 
-      {/* Filters */}
       <div className="bg-card rounded-2xl p-4 shadow-sm border border-border/50 flex flex-wrap gap-4 items-center">
         <div className="relative flex-1 min-w-[250px]">
           <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -43,10 +51,15 @@ export default function Customers() {
             className="pl-4 pr-10 rounded-xl bg-background/50 border-border/50 h-11"
           />
         </div>
-        {/* Placeholder for other filters */}
-        <select className="h-11 px-4 rounded-xl bg-background/50 border border-border/50 text-foreground outline-none focus:ring-2 focus:ring-primary/20">
+        <select
+          value={branchId}
+          onChange={e => { setBranchId(e.target.value); setPage(1); }}
+          className="h-11 px-4 rounded-xl bg-background/50 border border-border/50 text-foreground outline-none focus:ring-2 focus:ring-primary/20"
+        >
           <option value="">كل الفروع</option>
-          <option value="1">الفرع الرئيسي</option>
+          {branches.map((b: { id: number; name: string }) => (
+            <option key={b.id} value={String(b.id)}>{b.name}</option>
+          ))}
         </select>
       </div>
 

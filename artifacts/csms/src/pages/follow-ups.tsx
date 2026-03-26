@@ -1,15 +1,16 @@
 import { useState } from 'react';
-import { useListInvoices, useCreateFollowUp } from '@workspace/api-client-react';
+import { useListInvoices, useCreateFollowUp, useListComplaintTypes } from '@workspace/api-client-react';
 import { useAuth } from '@/lib/auth';
 import { useTranslation } from '@/lib/i18n';
 import { useQueryClient } from '@tanstack/react-query';
-import { PhoneCall, CheckCircle2, Clock, RefreshCw, Star } from 'lucide-react';
+import { CheckCircle2, Clock, RefreshCw, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 interface RatingDialogState {
   invoiceId: number;
   invoiceNumber: string;
+  customerId: number;
   rating: number;
   comment: string;
 }
@@ -26,6 +27,7 @@ export default function FollowUps() {
 
   const { data, isLoading, refetch } = useListInvoices({ page, limit: 15 });
   const { mutateAsync: createFollowUp } = useCreateFollowUp();
+  const { data: complaintTypes } = useListComplaintTypes({ query: { queryKey: ['listComplaintTypes'] } });
 
   const untrackedInvoices = data?.data?.filter(
     (inv) => !(inv as { has_follow_up?: boolean }).has_follow_up
@@ -75,14 +77,16 @@ export default function FollowUps() {
       });
       if (ratingDialog.rating <= 2) {
         const accessToken = localStorage.getItem('access_token');
+        const defaultTypeId = complaintTypes?.data?.[0]?.id ?? 1;
         await fetch('/api/complaints', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
           body: JSON.stringify({
+            customer_id: ratingDialog.customerId,
+            type_id: defaultTypeId,
             description: `تقييم منخفض (${ratingDialog.rating}/5) على الفاتورة ${ratingDialog.invoiceNumber}. ملاحظة: ${ratingDialog.comment || 'لا توجد ملاحظات'}`,
             channel: 'داخلي',
             priority: 'عالية',
-            status: 'جديدة',
             invoice_id: ratingDialog.invoiceId,
           }),
         });
@@ -230,7 +234,7 @@ export default function FollowUps() {
                           className="rounded-lg border-primary/30 text-primary hover:bg-primary/10 h-7 px-2 text-xs"
                           onClick={e => {
                             e.stopPropagation();
-                            setRatingDialog({ invoiceId: invoice.id, invoiceNumber: invoice.invoice_number, rating: 0, comment: '' });
+                            setRatingDialog({ invoiceId: invoice.id, invoiceNumber: invoice.invoice_number, customerId: invoice.customer_id, rating: 0, comment: '' });
                           }}
                         >
                           <Star className="w-3 h-3 mr-1" /> تقييم

@@ -1,20 +1,30 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useTranslation } from '@/lib/i18n';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Save, Building2, Users, Tags, Bell, Import } from 'lucide-react';
-import { useGetSettings, useUpsertSettings, useListUsers, useCreateUser, useListComplaintTypes, useListBranches } from '@workspace/api-client-react';
+import { Save, Building2, Users, Tags, GitBranch, Upload, CheckCircle2, AlertCircle } from 'lucide-react';
+import { useGetSettings, useUpsertSettings, useListUsers, useListComplaintTypes, useListBranches } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 
 type Section = 'company' | 'users' | 'types' | 'branches' | 'import';
+
+interface ImportResult {
+  inserted?: number;
+  skipped?: number;
+  errors?: string[];
+}
 
 export default function Settings() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [section, setSection] = useState<Section>('company');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importMode, setImportMode] = useState<'customers_only' | 'customers_and_invoices'>('customers_only');
+  const [uploading, setUploading] = useState(false);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
 
   const { data: settings } = useGetSettings();
   const { mutateAsync: upsert } = useUpsertSettings();
@@ -40,12 +50,38 @@ export default function Settings() {
     }
   };
 
+  const handleFileUpload = async (file: File) => {
+    setUploading(true);
+    setImportResult(null);
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('mode', importMode);
+    const accessToken = localStorage.getItem('access_token');
+    try {
+      const res = await fetch('/api/import/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: formData,
+      });
+      const json = await res.json() as ImportResult & { error?: string };
+      if (!res.ok) throw new Error(json.error || 'فشل الاستيراد');
+      setImportResult(json);
+      toast({ title: 'تم الاستيراد', description: `تم إدخال ${json.inserted ?? 0} سجل بنجاح` });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'حدث خطأ';
+      toast({ title: 'خطأ', description: msg, variant: 'destructive' });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   const navItems = [
     { id: 'company' as Section, label: 'معلومات الشركة', icon: Building2 },
     { id: 'users' as Section, label: 'إدارة المستخدمين', icon: Users },
     { id: 'types' as Section, label: 'أنواع الشكاوى', icon: Tags },
-    { id: 'branches' as Section, label: 'الفروع', icon: Bell },
-    { id: 'import' as Section, label: 'استيراد CSV', icon: Import },
+    { id: 'branches' as Section, label: 'الفروع', icon: GitBranch },
+    { id: 'import' as Section, label: 'استيراد CSV', icon: Upload },
   ];
 
   const users = usersData?.data ?? [];
@@ -191,13 +227,70 @@ export default function Settings() {
             )}
 
             {section === 'import' && (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <h2 className="text-xl font-bold">استيراد بيانات CSV</h2>
-                <p className="text-muted-foreground text-sm">يمكنك رفع ملف CSV لاستيراد بيانات العملاء أو الفواتير بشكل مجمع.</p>
-                <div className="border-2 border-dashed border-border/50 rounded-2xl p-12 text-center">
-                  <Import className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground mb-4">اسحب ملف CSV هنا أو اضغط للاختيار</p>
-                  <Button variant="outline" className="rounded-xl">اختر ملف CSV</Button>
+                <p className="text-muted-foreground text-sm">ارفع ملف CSV لاستيراد بيانات العملاء أو العملاء والفواتير معاً. يتم تجاهل السجلات المكررة (نفس الاسم والهاتف).</p>
+
+                <div className="space-y-3">
+                  <label className="text-sm font-medium">نوع الاستيراد</label>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setImportMode('customers_only')}
+                      className={`flex-1 px-4 py-3 rounded-xl border text-sm font-medium transition-colors ${importMode === 'customers_only' ? 'bg-primary/10 border-primary/50 text-primary' : 'border-border/50 text-muted-foreground hover:bg-muted'}`}
+                    >
+                      عملاء فقط
+                    </button>
+                    <button
+                      onClick={() => setImportMode('customers_and_invoices')}
+                      className={`flex-1 px-4 py-3 rounded-xl border text-sm font-medium transition-colors ${importMode === 'customers_and_invoices' ? 'bg-primary/10 border-primary/50 text-primary' : 'border-border/50 text-muted-foreground hover:bg-muted'}`}
+                    >
+                      عملاء + فواتير
+                    </button>
+                  </div>
+                </div>
+
+                <div
+                  className="border-2 border-dashed border-border/50 rounded-2xl p-12 text-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all"
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={e => { e.preventDefault(); const file = e.dataTransfer.files[0]; if (file) handleFileUpload(file); }}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv"
+                    className="hidden"
+                    onChange={e => { const file = e.target.files?.[0]; if (file) handleFileUpload(file); }}
+                  />
+                  <Upload className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                  {uploading ? (
+                    <p className="text-primary font-medium animate-pulse">جاري رفع الملف...</p>
+                  ) : (
+                    <>
+                      <p className="text-muted-foreground mb-2">اسحب ملف CSV هنا أو اضغط للاختيار</p>
+                      <p className="text-xs text-muted-foreground">يدعم النظام ملفات .csv بترميز UTF-8</p>
+                    </>
+                  )}
+                </div>
+
+                {importResult && (
+                  <div className={`rounded-xl p-4 border ${importResult.errors?.length ? 'bg-red-500/10 border-red-500/20' : 'bg-green-500/10 border-green-500/20'}`}>
+                    <div className="flex items-center gap-2 mb-2">
+                      {importResult.errors?.length ? <AlertCircle className="w-5 h-5 text-red-500" /> : <CheckCircle2 className="w-5 h-5 text-green-500" />}
+                      <p className="font-medium text-sm">نتيجة الاستيراد</p>
+                    </div>
+                    <p className="text-sm text-muted-foreground">تم إدخال: <span className="text-green-500 font-bold">{importResult.inserted ?? 0}</span> سجل | تم تجاهل: <span className="text-yellow-500 font-bold">{importResult.skipped ?? 0}</span> سجل</p>
+                    {importResult.errors?.slice(0, 3).map((e, i) => (
+                      <p key={i} className="text-xs text-red-400 mt-1">{e}</p>
+                    ))}
+                  </div>
+                )}
+
+                <div className="bg-muted/20 rounded-xl p-4">
+                  <p className="text-sm font-medium mb-2">تنسيق ملف CSV المطلوب (عملاء فقط)</p>
+                  <code className="text-xs text-muted-foreground block font-mono">اسم_العميل,رقم_الهاتف,المحافظة,النوع,الكود,العنوان</code>
+                  <p className="text-sm font-medium mb-2 mt-3">تنسيق ملف CSV (عملاء + فواتير)</p>
+                  <code className="text-xs text-muted-foreground block font-mono">اسم_العميل,رقم_الهاتف,المحافظة,النوع,الكود,رقم_الفاتورة,مبلغ_الفاتورة,حالة_الفاتورة</code>
                 </div>
               </div>
             )}

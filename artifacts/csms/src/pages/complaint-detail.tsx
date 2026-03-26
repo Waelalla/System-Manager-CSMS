@@ -51,7 +51,6 @@ export default function ComplaintDetail() {
                 <p className="text-sm font-bold text-foreground">تم إنشاء الشكوى</p>
                 <p className="text-xs text-muted-foreground mt-1">{new Date(complaint.created_at || '').toLocaleString('ar-EG')}</p>
               </div>
-              {/* Render dynamic logs here from complaint.logs */}
               {complaint.logs?.map((log, i) => (
                 <div key={i} className="relative">
                   <div className="absolute -left-[25px] w-4 h-4 rounded-full bg-accent ring-4 ring-accent/20"></div>

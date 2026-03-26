@@ -123,7 +123,17 @@ export default function Dashboard() {
   );
 }
 
-function KpiCard({ title, value, icon: Icon, trend, trendUp, color, bg }: any) {
+interface KpiCardProps {
+  title: string;
+  value: string | number;
+  icon: React.ElementType;
+  trend: string;
+  trendUp: boolean;
+  color: string;
+  bg: string;
+}
+
+function KpiCard({ title, value, icon: Icon, trend, trendUp, color, bg }: KpiCardProps) {
   return (
     <motion.div 
       whileHover={{ y: -4 }}

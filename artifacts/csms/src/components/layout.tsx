@@ -9,6 +9,8 @@ import {
   GitBranch, Upload
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useListNotifications, useMarkNotificationsRead, type NotificationItem } from '@workspace/api-client-react';
+import { useQueryClient } from '@tanstack/react-query';
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -120,9 +122,81 @@ function Sidebar() {
   );
 }
 
+function NotificationDropdown() {
+  const [open, setOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const { data, refetch } = useListNotifications(undefined, { query: { queryKey: ['/api/notifications'], refetchInterval: 30000 } });
+  const { mutateAsync: markRead } = useMarkNotificationsRead();
+  const notifications: NotificationItem[] = data?.data ?? [];
+  const unread = notifications.filter(n => !n.is_read);
+
+  const handleMarkRead = async (id: number) => {
+    await markRead({ data: { ids: [id] } });
+    queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
+  };
+
+  return (
+    <div className="relative">
+      <Button variant="ghost" size="icon" className="relative" onClick={() => { setOpen(o => !o); refetch(); }}>
+        <Bell className="w-5 h-5 text-muted-foreground" />
+        {unread.length > 0 && (
+          <span className="absolute top-1.5 right-1.5 min-w-[16px] h-4 px-1 bg-destructive text-white rounded-full text-[10px] flex items-center justify-center font-bold animate-pulse">
+            {unread.length > 9 ? '9+' : unread.length}
+          </span>
+        )}
+      </Button>
+      <AnimatePresence>
+        {open && (
+          <>
+            <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.15 }}
+              className="absolute left-0 top-12 z-40 w-80 bg-card border border-border rounded-2xl shadow-2xl overflow-hidden"
+            >
+              <div className="p-4 border-b border-border flex items-center justify-between">
+                <span className="font-semibold text-sm">الإشعارات</span>
+                {unread.length > 0 && (
+                  <span className="text-xs text-primary font-medium">{unread.length} غير مقروءة</span>
+                )}
+              </div>
+              <div className="max-h-80 overflow-y-auto divide-y divide-border">
+                {notifications.length === 0 ? (
+                  <p className="p-6 text-center text-sm text-muted-foreground">لا توجد إشعارات</p>
+                ) : (
+                  notifications.slice(0, 15).map(n => (
+                    <div
+                      key={n.id}
+                      className={`p-4 flex gap-3 cursor-pointer hover:bg-muted/30 transition-colors ${!n.is_read ? 'bg-primary/5' : ''}`}
+                      onClick={() => { if (!n.is_read && n.id) handleMarkRead(n.id); }}
+                    >
+                      <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${!n.is_read ? 'bg-primary' : 'bg-transparent'}`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{n.title}</p>
+                        {n.message && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>}
+                        {n.created_at && (
+                          <p className="text-xs text-muted-foreground/60 mt-1">
+                            {new Date(n.created_at).toLocaleString('ar-EG')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 function Header({ toggleSidebar }: { toggleSidebar: () => void }) {
   const { user, logout } = useAuth();
-  const { language, setLanguage, isRtl } = useTranslation();
+  const { language, setLanguage } = useTranslation();
 
   const toggleTheme = () => {
     document.documentElement.classList.toggle('dark');
@@ -145,20 +219,17 @@ function Header({ toggleSidebar }: { toggleSidebar: () => void }) {
           <Moon className="w-5 h-5 text-muted-foreground block dark:hidden" />
         </Button>
         
-        <div className="relative">
-          <Button variant="ghost" size="icon" className="relative">
-            <Bell className="w-5 h-5 text-muted-foreground" />
-            <span className="absolute top-2 right-2 w-2 h-2 bg-destructive rounded-full animate-pulse"></span>
-          </Button>
-        </div>
+        <NotificationDropdown />
         
         <div className="h-8 w-px bg-border mx-2"></div>
         
         <div className="flex items-center gap-3">
-          <div className="hidden md:block text-right">
-            <p className="text-sm font-semibold">{user?.name}</p>
-            <p className="text-xs text-muted-foreground">{user?.role_name}</p>
-          </div>
+          <Link href="/profile">
+            <div className="hidden md:block text-right cursor-pointer hover:opacity-80 transition-opacity">
+              <p className="text-sm font-semibold">{user?.name}</p>
+              <p className="text-xs text-muted-foreground">{user?.role_name}</p>
+            </div>
+          </Link>
           <Button variant="ghost" size="icon" onClick={logout} className="text-destructive hover:bg-destructive/10">
             <LogOut className="w-5 h-5" />
           </Button>

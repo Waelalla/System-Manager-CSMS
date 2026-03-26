@@ -8,9 +8,9 @@ const router = Router();
 
 router.get("/", requireAuth, async (req, res) => {
   try {
-    const settings = await db.select().from(settingsTable);
-    const flat = Object.fromEntries(settings.map(s => [s.key, s.value]));
-    res.json(flat);
+    const rows = await db.select().from(settingsTable);
+    const data = Object.fromEntries(rows.map(s => [s.key, s.value]));
+    res.json({ data });
   } catch (err) {
     req.log.error({ err }, "Get settings error");
     res.status(500).json({ error: "Internal Server Error" });
@@ -19,16 +19,15 @@ router.get("/", requireAuth, async (req, res) => {
 
 router.put("/", requireAuth, requireRole("Manager", "Manager/Voter"), async (req, res) => {
   try {
-    const updates = req.body as Record<string, unknown>;
+    const body = req.body as { settings?: Record<string, unknown> };
+    const updates = (body.settings && typeof body.settings === "object") ? body.settings : {};
     for (const [key, value] of Object.entries(updates)) {
       await db
         .insert(settingsTable)
         .values({ key, value: String(value) })
         .onConflictDoUpdate({ target: settingsTable.key, set: { value: String(value) } });
     }
-    const settings = await db.select().from(settingsTable);
-    const flat = Object.fromEntries(settings.map(s => [s.key, s.value]));
-    res.json(flat);
+    res.json({ success: true });
   } catch (err) {
     req.log.error({ err }, "Update settings error");
     res.status(500).json({ error: "Internal Server Error" });

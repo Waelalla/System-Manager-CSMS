@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { branchChangeLogsTable, customersTable, branchesTable } from "@workspace/db";
-import { eq, count } from "drizzle-orm";
+import { eq, count, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth.js";
 import { parsePagination, buildPaginated } from "../lib/pagination.js";
 
@@ -11,13 +11,14 @@ router.get("/", requireAuth, async (req, res) => {
   try {
     const { page, limit } = parsePagination(req.query as Record<string, unknown>);
     const offset = (page - 1) * limit;
-    const whereClause = undefined;
 
-    const [totalResult] = await db.select({ count: count() }).from(branchChangeLogsTable).where(whereClause);
+    const [totalResult] = await db.select({ count: count() }).from(branchChangeLogsTable);
+
     const logs = await db
       .select({
         id: branchChangeLogsTable.id,
         customer_id: branchChangeLogsTable.customer_id,
+        customer_code: customersTable.code,
         customer_name: customersTable.name,
         customer_phone: customersTable.phone,
         old_branch_id: branchChangeLogsTable.old_branch_id,
@@ -31,7 +32,25 @@ router.get("/", requireAuth, async (req, res) => {
       .offset(offset)
       .orderBy(branchChangeLogsTable.changed_at);
 
-    res.json(buildPaginated(logs, totalResult.count, { page, limit }));
+    const branchIds = [...new Set(
+      logs.flatMap(l => [l.old_branch_id, l.new_branch_id]).filter((id): id is number => id != null)
+    )];
+    let branchMap: Record<number, string> = {};
+    if (branchIds.length > 0) {
+      const branches = await db
+        .select({ id: branchesTable.id, name: branchesTable.name })
+        .from(branchesTable)
+        .where(inArray(branchesTable.id, branchIds));
+      branchMap = Object.fromEntries(branches.map(b => [b.id, b.name ?? ""]));
+    }
+
+    const enriched = logs.map(l => ({
+      ...l,
+      old_branch_name: l.old_branch_id != null ? (branchMap[l.old_branch_id] ?? null) : null,
+      new_branch_name: l.new_branch_id != null ? (branchMap[l.new_branch_id] ?? null) : null,
+    }));
+
+    res.json(buildPaginated(enriched, totalResult.count, { page, limit }));
   } catch (err) {
     req.log.error({ err }, "List branch change logs error");
     res.status(500).json({ error: "Internal Server Error" });

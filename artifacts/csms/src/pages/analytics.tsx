@@ -1,9 +1,12 @@
 import {
   useGetDashboardStats,
   useGetComplaintAnalytics,
-  useGetCustomerAnalytics,
   useGetInvoiceAnalytics,
   useGetBranchAnalytics,
+  type ComplaintAnalyticsByTypeItem,
+  type ComplaintAnalyticsByPriorityItem,
+  type BranchAnalyticsBranchesItem,
+  type DashboardStatsTrendItem,
 } from '@workspace/api-client-react';
 import { useTranslation } from '@/lib/i18n';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,13 +25,27 @@ const COLORS = [
   '#06b6d4',
 ];
 
-type AnyEntry = Record<string, unknown>;
-
-function mapCountData(items: AnyEntry[] | undefined, nameKey: string) {
+function mapTypeData(items: ComplaintAnalyticsByTypeItem[] | undefined) {
   if (!items) return [];
   return items.map(item => ({
-    name: (item[nameKey] as string | null) || 'غير محدد',
+    name: (item.type_name as string | null) || 'غير محدد',
     value: item.count as number,
+  }));
+}
+
+function mapPriorityData(items: ComplaintAnalyticsByPriorityItem[] | undefined) {
+  if (!items) return [];
+  return items.map(item => ({
+    name: (item.priority as string | null) || 'غير محدد',
+    value: item.count as number,
+  }));
+}
+
+function mapBranchData(items: BranchAnalyticsBranchesItem[] | undefined) {
+  if (!items) return [];
+  return items.map(b => ({
+    name: (b.branch_name as string) || 'غير محدد',
+    value: (b.complaints_count as number) || 0,
   }));
 }
 
@@ -36,6 +53,7 @@ export default function Analytics() {
   const { t } = useTranslation();
   const { data: stats, isLoading } = useGetDashboardStats();
   const { data: complaintAnalytics } = useGetComplaintAnalytics();
+  const { data: invoiceAnalytics } = useGetInvoiceAnalytics();
   const { data: branchAnalytics } = useGetBranchAnalytics();
 
   if (isLoading) {
@@ -46,14 +64,12 @@ export default function Analytics() {
     );
   }
 
-  const byTypeData = mapCountData(complaintAnalytics?.by_type as AnyEntry[], 'type_name');
-  const byPriorityData = mapCountData(complaintAnalytics?.by_priority as AnyEntry[], 'priority');
-  const branchData = ((branchAnalytics?.branches ?? []) as AnyEntry[]).map(b => ({
-    name: (b.branch_name as string) || 'غير محدد',
-    value: (b.complaints_count as number) || 0,
-  }));
-  const trendData = (stats?.trend ?? []) as AnyEntry[];
+  const byTypeData = mapTypeData(complaintAnalytics?.by_type);
+  const byPriorityData = mapPriorityData(complaintAnalytics?.by_priority);
+  const branchData = mapBranchData(branchAnalytics?.branches);
+  const trendData = (stats?.trend ?? []) as DashboardStatsTrendItem[];
 
+  const avgFollowupDays = invoiceAnalytics?.avg_followup_days ?? 0;
   const kpis = [
     { label: 'جديدة', value: stats?.complaints_new ?? 0, color: 'text-blue-500', bg: 'bg-blue-500/10' },
     { label: 'مستلمة', value: stats?.complaints_received ?? 0, color: 'text-yellow-500', bg: 'bg-yellow-500/10' },
@@ -61,6 +77,7 @@ export default function Analytics() {
     { label: 'مصعدة', value: stats?.complaints_escalated ?? 0, color: 'text-red-500', bg: 'bg-red-500/10' },
     { label: 'فواتير غير متابعة', value: stats?.invoices_untracked ?? 0, color: 'text-primary', bg: 'bg-primary/10' },
     { label: 'متوسط التقييم', value: (stats?.avg_rating ?? 0).toFixed(1), color: 'text-green-500', bg: 'bg-green-500/10' },
+    { label: 'متوسط أيام المتابعة', value: Number(avgFollowupDays).toFixed(1), color: 'text-accent', bg: 'bg-accent/10' },
   ];
 
   return (

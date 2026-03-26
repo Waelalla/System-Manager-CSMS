@@ -22,8 +22,9 @@ export default function Login() {
     try {
       const response = await loginMutation({ data: { email, password } });
       authenticate(response.access_token);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Invalid credentials');
+    } catch (err) {
+      const apiErr = err as { response?: { data?: { message?: string } } };
+      setError(apiErr.response?.data?.message || 'Invalid credentials');
     }
   };
 

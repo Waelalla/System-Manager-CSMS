@@ -8,7 +8,7 @@ import { hashPassword } from "../lib/auth.js";
 
 const router = Router();
 
-router.get("/", requireAuth, async (req, res) => {
+router.get("/", requireAuth, requireRole("Manager", "Manager/Voter"), async (req, res) => {
   try {
     const { page, limit } = parsePagination(req.query as Record<string, unknown>);
     const offset = (page - 1) * limit;
@@ -52,7 +52,7 @@ router.post("/", requireAuth, requireRole("Manager", "Manager/Voter"), async (re
   }
 });
 
-router.get("/:id", requireAuth, async (req, res) => {
+router.get("/:id", requireAuth, requireRole("Manager", "Manager/Voter"), async (req, res) => {
   try {
     const id = parseInt(req.params.id as string);
     const [user] = await db

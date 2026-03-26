@@ -6,7 +6,7 @@ import { requireAuth, requireRole } from "../lib/auth.js";
 
 const router = Router();
 
-router.get("/", requireAuth, async (req, res) => {
+router.get("/", requireAuth, requireRole("Manager", "Manager/Voter"), async (req, res) => {
   try {
     const roles = await db.select().from(rolesTable);
     res.json({ data: roles });

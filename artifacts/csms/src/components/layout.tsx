@@ -12,6 +12,47 @@ import { Button } from '@/components/ui/button';
 import { useListNotifications, useMarkNotificationsRead, type NotificationItem } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 
+function EscalationBanner() {
+  const queryClient = useQueryClient();
+  const { data } = useListNotifications({ unread_only: true }, { query: { queryKey: ['/api/notifications', 'escalation'], refetchInterval: 15000 } });
+  const { mutateAsync: markRead } = useMarkNotificationsRead();
+  const [, setLocation] = useLocation();
+
+  const escalations = (data?.data ?? []).filter((n: NotificationItem) => n.type === 'escalation');
+  if (escalations.length === 0) return null;
+
+  const handleAcknowledge = async () => {
+    const ids = escalations.map((n: NotificationItem) => n.id).filter(Boolean) as number[];
+    if (ids.length > 0) await markRead({ data: { ids } });
+    queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
+  };
+
+  return (
+    <motion.div
+      initial={{ height: 0, opacity: 0 }}
+      animate={{ height: 'auto', opacity: 1 }}
+      className="bg-red-500/10 border-b border-red-500/30 px-4 md:px-6 py-2 flex items-center gap-3 z-20 relative shrink-0"
+    >
+      <Bell className="w-4 h-4 text-red-500 animate-pulse shrink-0" />
+      <p className="text-sm font-semibold text-red-500 flex-1">
+        تنبيه عاجل: {escalations.length} شكو{escalations.length === 1 ? 'ى' : 'اوى'} مصعدة إداريًا تنتظر ردك
+      </p>
+      <button
+        onClick={() => { setLocation('/complaints?status=' + encodeURIComponent('تصعيد إداري')); }}
+        className="text-xs text-red-400 hover:text-red-300 border border-red-500/30 px-3 py-1 rounded-full transition-colors"
+      >
+        مراجعة
+      </button>
+      <button
+        onClick={handleAcknowledge}
+        className="text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 hover:text-red-300 border border-red-500/30 px-3 py-1 rounded-full transition-colors font-medium"
+      >
+        تم ✓
+      </button>
+    </motion.div>
+  );
+}
+
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   const [, setLocation] = useLocation();
@@ -49,6 +90,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
         <Header toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+        <EscalationBanner />
         
         <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 relative z-0">
           <motion.div

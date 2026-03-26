@@ -5,11 +5,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   Save, Building2, Users, Tags, GitBranch, Upload,
-  CheckCircle2, AlertCircle, Mail, Star, Palette, Shield
+  CheckCircle2, AlertCircle, Mail, Star, Palette, Shield,
+  Plus, Trash2, MapPin
 } from 'lucide-react';
 import {
   useGetSettings, useUpsertSettings,
-  useListUsers, useListComplaintTypes, useListBranches
+  useListUsers, useListComplaintTypes, useListBranches,
+  useCreateComplaintType, useDeleteComplaintType,
+  useCreateBranch, useDeleteBranch
 } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
@@ -41,8 +44,63 @@ export default function Settings() {
   const settings = (rawSettings as unknown as SettingsRecord) ?? {};
   const { mutateAsync: upsert } = useUpsertSettings();
   const { data: usersData } = useListUsers(undefined, { query: { queryKey: ['listUsers'], enabled: section === 'users' } });
-  const { data: typesData } = useListComplaintTypes({ query: { queryKey: ['listComplaintTypes'], enabled: section === 'types' } });
-  const { data: branchesData } = useListBranches({ query: { queryKey: ['listBranches'], enabled: section === 'branches' } });
+  const { data: typesData } = useListComplaintTypes({ query: { queryKey: ['listComplaintTypes'] } });
+  const { data: branchesData } = useListBranches({ query: { queryKey: ['listBranches'] } });
+  const { mutateAsync: createType } = useCreateComplaintType();
+  const { mutateAsync: deleteType } = useDeleteComplaintType();
+  const { mutateAsync: createBranch } = useCreateBranch();
+  const { mutateAsync: deleteBranch } = useDeleteBranch();
+
+  const [newTypeName, setNewTypeName] = useState('');
+  const [newTypeDesc, setNewTypeDesc] = useState('');
+  const [addingType, setAddingType] = useState(false);
+
+  const [newBranchName, setNewBranchName] = useState('');
+  const [newBranchGov, setNewBranchGov] = useState('');
+  const [newBranchAddress, setNewBranchAddress] = useState('');
+  const [addingBranch, setAddingBranch] = useState(false);
+
+  const handleAddType = async () => {
+    if (!newTypeName.trim()) return;
+    setAddingType(true);
+    try {
+      await createType({ data: { name: newTypeName.trim(), fields: [] } });
+      queryClient.invalidateQueries({ queryKey: ['listComplaintTypes'] });
+      setNewTypeName(''); setNewTypeDesc('');
+      toast({ title: 'تم الإضافة', description: `تم إضافة النوع "${newTypeName}"` });
+    } catch { toast({ title: 'خطأ', description: 'فشل في إضافة النوع', variant: 'destructive' }); }
+    finally { setAddingType(false); }
+  };
+
+  const handleDeleteType = async (id: number, name: string) => {
+    if (!confirm(`هل أنت متأكد من حذف النوع "${name}"؟`)) return;
+    try {
+      await deleteType({ id });
+      queryClient.invalidateQueries({ queryKey: ['listComplaintTypes'] });
+      toast({ title: 'تم الحذف' });
+    } catch { toast({ title: 'خطأ', description: 'فشل في الحذف', variant: 'destructive' }); }
+  };
+
+  const handleAddBranch = async () => {
+    if (!newBranchName.trim() || !newBranchGov.trim()) return;
+    setAddingBranch(true);
+    try {
+      await createBranch({ data: { name: newBranchName.trim(), governorate: newBranchGov.trim(), address: newBranchAddress.trim() || undefined } });
+      queryClient.invalidateQueries({ queryKey: ['listBranches'] });
+      setNewBranchName(''); setNewBranchGov(''); setNewBranchAddress('');
+      toast({ title: 'تم الإضافة', description: `تم إضافة الفرع "${newBranchName}"` });
+    } catch { toast({ title: 'خطأ', description: 'فشل في إضافة الفرع', variant: 'destructive' }); }
+    finally { setAddingBranch(false); }
+  };
+
+  const handleDeleteBranch = async (id: number, name: string) => {
+    if (!confirm(`هل أنت متأكد من حذف الفرع "${name}"؟`)) return;
+    try {
+      await deleteBranch({ id });
+      queryClient.invalidateQueries({ queryKey: ['listBranches'] });
+      toast({ title: 'تم الحذف' });
+    } catch { toast({ title: 'خطأ', description: 'فشل في الحذف', variant: 'destructive' }); }
+  };
 
   const [form, setForm] = useState({
     company_name: String(settings.company_name ?? ''),
@@ -233,7 +291,40 @@ export default function Settings() {
 
             {section === 'types' && (
               <div className="space-y-4">
-                <h2 className="text-xl font-bold">أنواع الشكاوى</h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-bold">أنواع الشكاوى</h2>
+                  <span className="text-sm text-muted-foreground">{types.length} نوع</span>
+                </div>
+
+                <div className="bg-muted/20 rounded-xl p-4 border border-border/40">
+                  <p className="text-sm font-medium mb-3 flex items-center gap-2"><Plus className="w-4 h-4 text-primary" /> إضافة نوع جديد</p>
+                  <div className="grid grid-cols-1 gap-3">
+                    <div className="flex gap-3">
+                      <Input
+                        value={newTypeName}
+                        onChange={e => setNewTypeName(e.target.value)}
+                        placeholder="اسم النوع (مثال: عيب مصنعي)"
+                        className="h-10 bg-background/50 rounded-xl flex-1"
+                        onKeyDown={e => { if (e.key === 'Enter') handleAddType(); }}
+                      />
+                    </div>
+                    <Input
+                      value={newTypeDesc}
+                      onChange={e => setNewTypeDesc(e.target.value)}
+                      placeholder="وصف مختصر (اختياري)"
+                      className="h-10 bg-background/50 rounded-xl"
+                    />
+                    <Button
+                      onClick={handleAddType}
+                      disabled={!newTypeName.trim() || addingType}
+                      className="rounded-xl h-10 w-full bg-primary hover:bg-primary/90 text-white"
+                    >
+                      <Plus className="w-4 h-4 mr-1" />
+                      {addingType ? 'جاري الإضافة...' : 'إضافة'}
+                    </Button>
+                  </div>
+                </div>
+
                 <div className="rounded-xl border border-border/50 overflow-hidden">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/30">
@@ -241,14 +332,25 @@ export default function Settings() {
                         <th className="text-right p-4 font-medium">#</th>
                         <th className="text-right p-4 font-medium">اسم النوع</th>
                         <th className="text-right p-4 font-medium">الوصف</th>
+                        <th className="p-4 font-medium text-left">حذف</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/30">
-                      {types.map((tp: { id: number; name: string; description?: string }, i: number) => (
+                      {types.length === 0 ? (
+                        <tr><td colSpan={4} className="p-8 text-center text-muted-foreground text-sm">لا توجد أنواع — أضف نوعًا جديدًا أعلاه</td></tr>
+                      ) : types.map((tp: { id: number; name: string; description?: string }, i: number) => (
                         <tr key={tp.id} className="hover:bg-muted/20">
                           <td className="p-4 text-muted-foreground">{i + 1}</td>
                           <td className="p-4 font-medium">{tp.name}</td>
                           <td className="p-4 text-muted-foreground text-xs">{tp.description ?? '-'}</td>
+                          <td className="p-4 text-left">
+                            <button
+                              onClick={() => handleDeleteType(tp.id, tp.name)}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -259,7 +361,43 @@ export default function Settings() {
 
             {section === 'branches' && (
               <div className="space-y-4">
-                <h2 className="text-xl font-bold">إدارة الفروع</h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-bold">إدارة الفروع</h2>
+                  <span className="text-sm text-muted-foreground">{branches.length} فرع</span>
+                </div>
+
+                <div className="bg-muted/20 rounded-xl p-4 border border-border/40">
+                  <p className="text-sm font-medium mb-3 flex items-center gap-2"><MapPin className="w-4 h-4 text-primary" /> إضافة فرع جديد</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <Input
+                      value={newBranchName}
+                      onChange={e => setNewBranchName(e.target.value)}
+                      placeholder="اسم الفرع (مثال: فرع المعادي)"
+                      className="h-10 bg-background/50 rounded-xl"
+                    />
+                    <Input
+                      value={newBranchGov}
+                      onChange={e => setNewBranchGov(e.target.value)}
+                      placeholder="المحافظة (مثال: القاهرة) *"
+                      className="h-10 bg-background/50 rounded-xl"
+                    />
+                    <Input
+                      value={newBranchAddress}
+                      onChange={e => setNewBranchAddress(e.target.value)}
+                      placeholder="العنوان التفصيلي (اختياري)"
+                      className="h-10 bg-background/50 rounded-xl md:col-span-2"
+                    />
+                    <Button
+                      onClick={handleAddBranch}
+                      disabled={!newBranchName.trim() || !newBranchGov.trim() || addingBranch}
+                      className="rounded-xl h-10 bg-primary hover:bg-primary/90 text-white md:col-span-2"
+                    >
+                      <Plus className="w-4 h-4 mr-1" />
+                      {addingBranch ? 'جاري الإضافة...' : 'إضافة فرع'}
+                    </Button>
+                  </div>
+                </div>
+
                 <div className="rounded-xl border border-border/50 overflow-hidden">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/30">
@@ -267,14 +405,25 @@ export default function Settings() {
                         <th className="text-right p-4 font-medium">الفرع</th>
                         <th className="text-right p-4 font-medium">المحافظة</th>
                         <th className="text-right p-4 font-medium">العنوان</th>
+                        <th className="p-4 font-medium text-left">حذف</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/30">
-                      {branches.map((b: { id: number; name: string; governorate?: string; address?: string }) => (
+                      {branches.length === 0 ? (
+                        <tr><td colSpan={4} className="p-8 text-center text-muted-foreground text-sm">لا توجد فروع — أضف فرعًا جديدًا أعلاه</td></tr>
+                      ) : branches.map((b: { id: number; name: string; governorate?: string; address?: string }) => (
                         <tr key={b.id} className="hover:bg-muted/20">
                           <td className="p-4 font-medium">{b.name}</td>
                           <td className="p-4 text-muted-foreground">{b.governorate ?? '-'}</td>
                           <td className="p-4 text-muted-foreground text-xs">{b.address ?? '-'}</td>
+                          <td className="p-4 text-left">
+                            <button
+                              onClick={() => handleDeleteBranch(b.id, b.name)}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -614,7 +763,11 @@ export default function Settings() {
                       <p className="text-xs text-yellow-400 mt-2">{importResult.warnings!.length} تحذير — تحقق من سجلات الاستيراد للتفاصيل</p>
                     )}
                     {importResult.errors?.slice(0, 3).map((e, i) => (
-                      <p key={i} className="text-xs text-red-400 mt-1">{e}</p>
+                      <p key={i} className="text-xs text-red-400 mt-1">
+                        {typeof e === 'string' ? e : typeof e === 'object' && e !== null
+                          ? `سطر ${(e as {row?:number}).row ?? '?'}: ${(e as {reason?:string}).reason ?? JSON.stringify(e)}`
+                          : String(e)}
+                      </p>
                     ))}
                   </div>
                 )}

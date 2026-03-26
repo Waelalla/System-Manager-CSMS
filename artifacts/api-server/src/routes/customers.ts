@@ -140,12 +140,14 @@ router.put("/:id", requireAuth, requireRole("Customer Service Agent", "Manager/V
     if (address !== undefined) updates.address = address;
     if (branch_id && branch_id !== existing.branch_id) {
       updates.branch_id = branch_id;
-      await db.insert(branchChangeLogsTable).values({
-        customer_id: id,
-        old_branch_id: existing.branch_id,
-        new_branch_id: branch_id,
-        notes: "Updated via customer edit",
-      });
+      if (existing.branch_id != null) {
+        await db.insert(branchChangeLogsTable).values({
+          customer_id: id,
+          old_branch_id: existing.branch_id,
+          new_branch_id: branch_id,
+          notes: "Updated via customer edit",
+        });
+      }
     }
 
     await db.update(customersTable).set(updates).where(eq(customersTable.id, id));

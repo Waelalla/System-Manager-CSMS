@@ -50,25 +50,28 @@ router.post("/csv", requireAuth, requireRole("Manager", "Manager/Voter"), async 
     const products = await db.select().from(productsTable);
     const productMap = new Map(products.map(p => [p.name.toLowerCase(), p]));
 
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i] as Record<string, string>;
+    const allRows = rows as Record<string, string>[];
+    const validRows2 = allRows.filter(r => r.name?.trim() || r.phone?.trim());
+    stats.total_rows = validRows2.length;
+
+    for (let i = 0; i < validRows2.length; i++) {
+      const row = validRows2[i];
       try {
         const { code, name, phone, type, governorate, branch, address } = row;
-        if (!name || !phone) {
-          errors.push({ row: i + 1, field: "name/phone", reason: "name and phone are required" });
+        if (!name?.trim() || !phone?.trim()) {
+          errors.push({ row: i + 1, field: "name/phone", reason: "الاسم والهاتف مطلوبان" });
           continue;
         }
 
-        const branchRecord = branchMap.get((branch ?? "").toLowerCase());
-        if (!branchRecord) {
-          warnings.push({ row: i + 1, field: "branch", reason: `Branch '${branch}' not found, skipped` });
-          continue;
+        const branchRecord = branch?.trim() ? branchMap.get(branch.trim().toLowerCase()) : undefined;
+        if (branch?.trim() && !branchRecord) {
+          warnings.push({ row: i + 1, field: "branch", reason: `الفرع '${branch}' غير موجود، تم الاستيراد بدون فرع` });
         }
 
         const [existing] = await db
           .select()
           .from(customersTable)
-          .where(and(eq(customersTable.name, name), eq(customersTable.phone, phone)))
+          .where(and(eq(customersTable.name, name.trim()), eq(customersTable.phone, phone.trim())))
           .limit(1);
 
         if (existing) {
@@ -77,14 +80,16 @@ router.post("/csv", requireAuth, requireRole("Manager", "Manager/Voter"), async 
           if (governorate && governorate !== existing.governorate) updates.governorate = governorate;
           if (address !== undefined) updates.address = address;
 
-          if (branchRecord.id !== existing.branch_id) {
+          if (branchRecord && branchRecord.id !== existing.branch_id) {
             updates.branch_id = branchRecord.id;
-            await db.insert(branchChangeLogsTable).values({
-              customer_id: existing.id,
-              old_branch_id: existing.branch_id,
-              new_branch_id: branchRecord.id,
-              notes: `Imported from CSV row ${i + 1}`,
-            });
+            if (existing.branch_id != null) {
+              await db.insert(branchChangeLogsTable).values({
+                customer_id: existing.id,
+                old_branch_id: existing.branch_id,
+                new_branch_id: branchRecord.id,
+                notes: `Imported from CSV row ${i + 1}`,
+              });
+            }
           }
 
           if (Object.keys(updates).length > 0) {
@@ -92,14 +97,14 @@ router.post("/csv", requireAuth, requireRole("Manager", "Manager/Voter"), async 
           }
           stats.updated_customers++;
         } else {
-          const customerCode = code || generateCustomerCode();
+          const customerCode = code?.trim() || generateCustomerCode();
           await db.insert(customersTable).values({
             code: customerCode,
-            name,
-            phone,
+            name: name.trim(),
+            phone: phone.trim(),
             type: type ?? "عادي",
             governorate: governorate ?? "",
-            branch_id: branchRecord.id,
+            branch_id: branchRecord?.id,
             address: address ?? null,
           });
           stats.added_customers++;
@@ -172,11 +177,16 @@ router.post("/upload", requireAuth, requireRole("Manager", "Manager/Voter"), upl
       return;
     }
     const mode = (req.body.mode as string) || "customers_only";
-    const csvContent = req.file.buffer.toString("utf-8");
+    const csvContent = req.file.buffer.toString("utf-8").replace(/^\uFEFF/, "");
 
     let rows: Record<string, string>[];
     try {
-      rows = parse(csvContent, { columns: true, skip_empty_lines: true, trim: true }) as Record<string, string>[];
+      rows = parse(csvContent, {
+        columns: true,
+        skip_empty_lines: true,
+        trim: true,
+        relax_column_count: true,
+      }) as Record<string, string>[];
     } catch (parseErr) {
       res.status(400).json({ error: `CSV parse error: ${String(parseErr)}` });
       return;
@@ -197,43 +207,48 @@ router.post("/upload", requireAuth, requireRole("Manager", "Manager/Voter"), upl
     const products = await db.select().from(productsTable);
     const productMap = new Map(products.map(p => [p.name.toLowerCase(), p]));
 
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
+    const validRows = rows.filter(r => r.name?.trim() || r.phone?.trim());
+    stats.total_rows = validRows.length;
+
+    for (let i = 0; i < validRows.length; i++) {
+      const row = validRows[i];
       try {
         const { code, name, phone, type, governorate, branch, address } = row;
-        if (!name || !phone) {
-          errors.push({ row: i + 1, field: "name/phone", reason: "name and phone are required" });
+        if (!name?.trim() || !phone?.trim()) {
+          errors.push({ row: i + 1, field: "name/phone", reason: "الاسم والهاتف مطلوبان" });
           continue;
         }
-        const branchRecord = branchMap.get((branch ?? "").toLowerCase());
-        if (!branchRecord) {
-          warnings.push({ row: i + 1, field: "branch", reason: `Branch '${branch}' not found, skipped` });
-          continue;
+        const branchRecord = branch?.trim() ? branchMap.get(branch.trim().toLowerCase()) : undefined;
+        if (branch?.trim() && !branchRecord) {
+          warnings.push({ row: i + 1, field: "branch", reason: `الفرع '${branch}' غير موجود، تم الاستيراد بدون فرع` });
         }
+
         const [existing] = await db
           .select().from(customersTable)
-          .where(and(eq(customersTable.name, name), eq(customersTable.phone, phone))).limit(1);
+          .where(and(eq(customersTable.name, name.trim()), eq(customersTable.phone, phone.trim()))).limit(1);
 
         if (existing) {
           const updates: Record<string, unknown> = {};
           if (type && type !== existing.type) updates.type = type;
           if (governorate && governorate !== existing.governorate) updates.governorate = governorate;
           if (address !== undefined) updates.address = address;
-          if (branchRecord.id !== existing.branch_id) {
+          if (branchRecord && branchRecord.id !== existing.branch_id) {
             updates.branch_id = branchRecord.id;
-            await db.insert(branchChangeLogsTable).values({
-              customer_id: existing.id, old_branch_id: existing.branch_id,
-              new_branch_id: branchRecord.id, notes: `CSV upload row ${i + 1}`,
-            });
+            if (existing.branch_id != null) {
+              await db.insert(branchChangeLogsTable).values({
+                customer_id: existing.id, old_branch_id: existing.branch_id,
+                new_branch_id: branchRecord.id, notes: `CSV upload row ${i + 1}`,
+              });
+            }
           }
           if (Object.keys(updates).length > 0)
             await db.update(customersTable).set(updates).where(eq(customersTable.id, existing.id));
           stats.updated_customers++;
         } else {
-          const customerCode = code || generateCustomerCode();
+          const customerCode = code?.trim() || generateCustomerCode();
           await db.insert(customersTable).values({
-            code: customerCode, name, phone, type: type ?? "عادي",
-            governorate: governorate ?? "", branch_id: branchRecord.id, address: address ?? null,
+            code: customerCode, name: name.trim(), phone: phone.trim(), type: type ?? "عادي",
+            governorate: governorate ?? "", branch_id: branchRecord?.id, address: address ?? null,
           });
           stats.added_customers++;
         }

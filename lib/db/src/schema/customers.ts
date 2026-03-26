@@ -10,7 +10,7 @@ export const customersTable = pgTable("customers", {
   phone: text("phone").notNull(),
   type: text("type").notNull(),
   governorate: text("governorate").notNull(),
-  branch_id: integer("branch_id").notNull().references(() => branchesTable.id),
+  branch_id: integer("branch_id").references(() => branchesTable.id),
   address: text("address"),
   extra: jsonb("extra"),
 });

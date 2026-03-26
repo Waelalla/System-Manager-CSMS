@@ -18,6 +18,7 @@ export default function Complaints() {
       case 'جاري المعالجة': return 'bg-purple-500/10 text-purple-500 border-purple-500/20';
       case 'مصعدة': return 'bg-orange-500/10 text-orange-500 border-orange-500/20';
       case 'تصعيد إداري': return 'bg-red-500/10 text-red-500 border-red-500/20';
+      case 'محلول': return 'bg-teal-500/10 text-teal-400 border-teal-500/20';
       case 'مغلق': return 'bg-green-500/10 text-green-500 border-green-500/20';
       case 'مرفوض': return 'bg-gray-500/10 text-gray-400 border-gray-500/20';
       default: return 'bg-muted text-muted-foreground border-border';

@@ -169,15 +169,16 @@ router.get("/:id", requireAuth, async (req, res) => {
   }
 });
 
-const VALID_STATUSES = ["جديدة", "مستلمة", "جاري المعالجة", "مصعدة", "تصعيد إداري", "مغلق", "مرفوض"] as const;
+const VALID_STATUSES = ["جديدة", "مستلمة", "جاري المعالجة", "مصعدة", "تصعيد إداري", "محلول", "مغلق", "مرفوض"] as const;
 type ComplaintStatus = typeof VALID_STATUSES[number];
 
 const LIFECYCLE_TRANSITIONS: Record<ComplaintStatus, ComplaintStatus[]> = {
   "جديدة":          ["مستلمة", "مرفوض"],
   "مستلمة":         ["جاري المعالجة", "مصعدة", "مرفوض"],
-  "جاري المعالجة":  ["مصعدة", "تصعيد إداري", "مغلق"],
-  "مصعدة":          ["تصعيد إداري", "مغلق"],
-  "تصعيد إداري":    ["مغلق", "جاري المعالجة"],
+  "جاري المعالجة":  ["محلول", "مصعدة", "تصعيد إداري"],
+  "مصعدة":          ["تصعيد إداري", "جاري المعالجة"],
+  "تصعيد إداري":    ["محلول", "جاري المعالجة"],
+  "محلول":          ["مغلق", "جاري المعالجة"],
   "مغلق":           [],
   "مرفوض":          [],
 };
@@ -210,7 +211,7 @@ router.put("/:id/status", requireAuth, requireRole("Customer Service Agent", "Ma
 
     const updateData: Record<string, unknown> = { status };
     if (status === "مستلمة") updateData.assigned_to_id = req.user!.userId;
-    if (status === "مغلق") updateData.resolved_at = new Date();
+    if (status === "محلول") updateData.resolved_at = new Date();
 
     await db.update(complaintsTable).set(updateData).where(eq(complaintsTable.id, id));
     await logComplaintAction(id, `تغيير الحالة إلى: ${status}`, req.user!.userId, note);

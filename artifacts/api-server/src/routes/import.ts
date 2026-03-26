@@ -182,12 +182,6 @@ router.post("/upload", requireAuth, requireRole("Manager", "Manager/Voter"), upl
       return;
     }
 
-    const processReq = {
-      body: { mode, rows, file_name: req.file.originalname },
-      user: req.user,
-      log: req.log,
-    } as AuthRequest;
-
     const stats = {
       total_rows: rows.length,
       added_customers: 0,
@@ -295,7 +289,7 @@ router.post("/upload", requireAuth, requireRole("Manager", "Manager/Voter"), upl
       warnings: warnings.length > 0 ? warnings : null,
     }).returning();
 
-    processReq.log.info({ log_id: log.id }, "CSV upload processed");
+    req.log.info({ log_id: log.id }, "CSV upload processed");
     res.json({ ...stats, errors, warnings, log_id: log.id });
   } catch (err) {
     req.log.error({ err }, "CSV upload error");

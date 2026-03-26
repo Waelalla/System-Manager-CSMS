@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { settingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { requireAuth } from "../lib/auth.js";
+import { requireAuth, requireRole } from "../lib/auth.js";
 
 const router = Router();
 
@@ -17,7 +17,7 @@ router.get("/", requireAuth, async (req, res) => {
   }
 });
 
-router.put("/", requireAuth, async (req, res) => {
+router.put("/", requireAuth, requireRole("Manager", "Manager/Voter"), async (req, res) => {
   try {
     const updates = req.body as Record<string, unknown>;
     for (const [key, value] of Object.entries(updates)) {

@@ -14,6 +14,8 @@ import Dashboard from "@/pages/dashboard";
 import Customers from "@/pages/customers";
 import Complaints from "@/pages/complaints";
 import ComplaintDetail from "@/pages/complaint-detail";
+import Invoices from "@/pages/invoices";
+import FollowUps from "@/pages/follow-ups";
 import Analytics from "@/pages/analytics";
 import Settings from "@/pages/settings";
 import Copyright from "@/pages/copyright";
@@ -38,8 +40,8 @@ function AuthenticatedRoutes() {
         <Route path="/customers" component={Customers} />
         <Route path="/complaints" component={Complaints} />
         <Route path="/complaints/:id" component={ComplaintDetail} />
-        <Route path="/invoices" component={() => <div className="p-8 text-center text-muted-foreground">الفواتير (قيد التطوير)</div>} />
-        <Route path="/follow-ups" component={() => <div className="p-8 text-center text-muted-foreground">متابعة الفواتير (قيد التطوير)</div>} />
+        <Route path="/invoices" component={Invoices} />
+        <Route path="/follow-ups" component={FollowUps} />
         <Route path="/analytics" component={Analytics} />
         <Route path="/settings" component={Settings} />
         <Route component={NotFound} />

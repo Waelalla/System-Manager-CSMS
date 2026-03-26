@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { invoicesTable, customersTable, productsTable, branchesTable, followUpsTable } from "@workspace/db";
-import { eq, count, and, sql } from "drizzle-orm";
+import { eq, count, and, sql, SQL } from "drizzle-orm";
 import { requireAuth } from "../lib/auth.js";
 import { parsePagination, buildPaginated } from "../lib/pagination.js";
 
@@ -13,18 +13,18 @@ router.get("/", requireAuth, async (req, res) => {
     const offset = (page - 1) * limit;
     const { customer_id, status, untracked_today } = req.query as Record<string, string>;
 
-    const conditions: ReturnType<typeof eq>[] = [];
+    const conditions: SQL[] = [];
     if (customer_id) conditions.push(eq(invoicesTable.customer_id, parseInt(customer_id)));
     if (status) conditions.push(eq(invoicesTable.status, status));
-
-    let whereClause: ReturnType<typeof and> | undefined = conditions.length > 0 ? and(...conditions) : undefined;
 
     if (untracked_today === "true") {
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
-      const subq = sql`${invoicesTable.id} NOT IN (SELECT invoice_id FROM follow_ups) AND ${invoicesTable.created_at} >= ${todayStart.toISOString()}`;
-      whereClause = conditions.length > 0 ? and(...conditions, subq) : subq as any;
+      conditions.push(sql`${invoicesTable.id} NOT IN (SELECT invoice_id FROM follow_ups)`);
+      conditions.push(sql`${invoicesTable.created_at} >= ${todayStart.toISOString()}`);
     }
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
     const [totalResult] = await db.select({ count: count() }).from(invoicesTable).where(whereClause);
 
@@ -76,11 +76,78 @@ router.post("/", requireAuth, async (req, res) => {
       return;
     }
     const [invoice] = await db.insert(invoicesTable).values({
-      invoice_number, invoice_date: new Date(invoice_date), amount, status, product_id: product_id ?? null, customer_id
+      invoice_number,
+      invoice_date: new Date(invoice_date),
+      amount,
+      status,
+      product_id: product_id ?? null,
+      customer_id,
     }).returning();
     res.status(201).json(invoice);
   } catch (err) {
     req.log.error({ err }, "Create invoice error");
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+router.get("/:id", requireAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [invoice] = await db
+      .select({
+        id: invoicesTable.id,
+        invoice_number: invoicesTable.invoice_number,
+        invoice_date: invoicesTable.invoice_date,
+        amount: invoicesTable.amount,
+        status: invoicesTable.status,
+        product_id: invoicesTable.product_id,
+        product_name: productsTable.name,
+        customer_id: invoicesTable.customer_id,
+        customer_name: customersTable.name,
+        branch_name: branchesTable.name,
+        created_at: invoicesTable.created_at,
+      })
+      .from(invoicesTable)
+      .leftJoin(customersTable, eq(invoicesTable.customer_id, customersTable.id))
+      .leftJoin(branchesTable, eq(customersTable.branch_id, branchesTable.id))
+      .leftJoin(productsTable, eq(invoicesTable.product_id, productsTable.id))
+      .where(eq(invoicesTable.id, id))
+      .limit(1);
+    if (!invoice) { res.status(404).json({ error: "Not Found" }); return; }
+    res.json(invoice);
+  } catch (err) {
+    req.log.error({ err }, "Get invoice error");
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+router.put("/:id", requireAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { invoice_number, invoice_date, amount, status, product_id } = req.body;
+    const updates: Record<string, unknown> = {};
+    if (invoice_number) updates.invoice_number = invoice_number;
+    if (invoice_date) updates.invoice_date = new Date(invoice_date);
+    if (amount) updates.amount = amount;
+    if (status) updates.status = status;
+    if (product_id !== undefined) updates.product_id = product_id;
+    await db.update(invoicesTable).set(updates).where(eq(invoicesTable.id, id));
+    const [invoice] = await db.select({ id: invoicesTable.id, invoice_number: invoicesTable.invoice_number, amount: invoicesTable.amount, status: invoicesTable.status }).from(invoicesTable).where(eq(invoicesTable.id, id)).limit(1);
+    if (!invoice) { res.status(404).json({ error: "Not Found" }); return; }
+    res.json(invoice);
+  } catch (err) {
+    req.log.error({ err }, "Update invoice error");
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+router.delete("/:id", requireAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    await db.delete(invoicesTable).where(eq(invoicesTable.id, id));
+    res.json({ success: true, message: "Invoice deleted" });
+  } catch (err) {
+    req.log.error({ err }, "Delete invoice error");
     res.status(500).json({ error: "Internal Server Error" });
   }
 });

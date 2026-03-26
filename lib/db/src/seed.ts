@@ -98,7 +98,7 @@ async function seed() {
     const existing = await db.select().from(usersTable).where(eq(usersTable.email, user.email)).limit(1);
     if (existing.length === 0) {
       const hash = await bcrypt.hash(user.password, 10);
-      await db.insert(usersTable).values({ name: user.name, email: user.email, password_hash: hash, role_id: user.role_id, active: true });
+      await db.insert(usersTable).values({ name: user.name, email: user.email, password_hash: hash, role_id: user.role_id });
       console.log(`  ✓ Created user: ${user.email}`);
     } else {
       console.log(`  - User exists: ${user.email}`);

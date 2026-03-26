@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { usersTable, rolesTable } from "@workspace/db";
 import { eq, count } from "drizzle-orm";
-import { requireAuth } from "../lib/auth.js";
+import { requireAuth, requireRole } from "../lib/auth.js";
 import { parsePagination, buildPaginated } from "../lib/pagination.js";
 import { hashPassword } from "../lib/auth.js";
 
@@ -35,7 +35,7 @@ router.get("/", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/", requireAuth, async (req, res) => {
+router.post("/", requireAuth, requireRole("Manager", "Manager/Voter"), async (req, res) => {
   try {
     const { name, email, password, role_id } = req.body;
     if (!name || !email || !password || !role_id) {
@@ -69,7 +69,7 @@ router.get("/:id", requireAuth, async (req, res) => {
   }
 });
 
-router.put("/:id", requireAuth, async (req, res) => {
+router.put("/:id", requireAuth, requireRole("Manager", "Manager/Voter"), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { name, email, password, role_id } = req.body;
@@ -89,7 +89,7 @@ router.put("/:id", requireAuth, async (req, res) => {
   }
 });
 
-router.delete("/:id", requireAuth, async (req, res) => {
+router.delete("/:id", requireAuth, requireRole("Manager"), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     await db.delete(usersTable).where(eq(usersTable.id, id));

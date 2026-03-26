@@ -3,12 +3,18 @@ import { useTranslation } from '@/lib/i18n';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Save, Building2, Users, Tags, GitBranch, Upload, CheckCircle2, AlertCircle } from 'lucide-react';
-import { useGetSettings, useUpsertSettings, useListUsers, useListComplaintTypes, useListBranches } from '@workspace/api-client-react';
+import {
+  Save, Building2, Users, Tags, GitBranch, Upload,
+  CheckCircle2, AlertCircle, Mail, Star, Palette, Shield
+} from 'lucide-react';
+import {
+  useGetSettings, useUpsertSettings,
+  useListUsers, useListComplaintTypes, useListBranches
+} from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 
-type Section = 'company' | 'users' | 'types' | 'branches' | 'import';
+type Section = 'company' | 'users' | 'types' | 'branches' | 'import' | 'email' | 'points' | 'appearance' | 'security';
 
 interface ImportResult {
   added_customers?: number;
@@ -18,6 +24,8 @@ interface ImportResult {
   warnings?: { row?: number; field?: string; reason?: string }[];
   errors?: string[];
 }
+
+type SettingsRecord = Record<string, string | number | boolean | undefined>;
 
 export default function Settings() {
   const { t } = useTranslation();
@@ -29,23 +37,39 @@ export default function Settings() {
   const [uploading, setUploading] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
 
-  const { data: settings } = useGetSettings();
+  const { data: rawSettings } = useGetSettings();
+  const settings = (rawSettings as unknown as SettingsRecord) ?? {};
   const { mutateAsync: upsert } = useUpsertSettings();
   const { data: usersData } = useListUsers(undefined, { query: { queryKey: ['listUsers'], enabled: section === 'users' } });
   const { data: typesData } = useListComplaintTypes({ query: { queryKey: ['listComplaintTypes'], enabled: section === 'types' } });
   const { data: branchesData } = useListBranches({ query: { queryKey: ['listBranches'], enabled: section === 'branches' } });
 
   const [form, setForm] = useState({
-    company_name: (settings as { company_name?: string })?.company_name ?? '',
-    company_email: (settings as { company_email?: string })?.company_email ?? '',
-    company_address: (settings as { company_address?: string })?.company_address ?? '',
-    timezone: (settings as { timezone?: string })?.timezone ?? 'Africa/Cairo',
-    language: (settings as { language?: string })?.language ?? 'ar',
+    company_name: String(settings.company_name ?? ''),
+    company_email: String(settings.company_email ?? ''),
+    company_address: String(settings.company_address ?? ''),
+    timezone: String(settings.timezone ?? 'Africa/Cairo'),
+    language: String(settings.language ?? 'ar'),
+    emailjs_service_id: String(settings.emailjs_service_id ?? ''),
+    emailjs_template_id: String(settings.emailjs_template_id ?? ''),
+    emailjs_public_key: String(settings.emailjs_public_key ?? ''),
+    notify_on_new_complaint: settings.notify_on_new_complaint !== false,
+    notify_on_escalation: settings.notify_on_escalation !== false,
+    points_follow_up: String(settings.points_follow_up ?? '10'),
+    points_resolve_complaint: String(settings.points_resolve_complaint ?? '20'),
+    points_close_complaint: String(settings.points_close_complaint ?? '5'),
+    points_escalation_penalty: String(settings.points_escalation_penalty ?? '5'),
+    theme: String(settings.theme ?? 'dark'),
+    accent_color: String(settings.accent_color ?? '#6366f1'),
+    session_timeout_minutes: String(settings.session_timeout_minutes ?? '60'),
+    max_login_attempts: String(settings.max_login_attempts ?? '5'),
+    require_2fa: settings.require_2fa === true,
+    google_oauth_client_id: String(settings.google_oauth_client_id ?? ''),
   });
 
-  const handleSave = async () => {
+  const handleSave = async (extra?: Partial<typeof form>) => {
     try {
-      await upsert({ data: { settings: form } });
+      await upsert({ data: { settings: { ...form, ...extra } } });
       queryClient.invalidateQueries({ queryKey: ['/api/settings'] });
       toast({ title: 'تم الحفظ', description: 'تم حفظ الإعدادات بنجاح' });
     } catch {
@@ -84,6 +108,10 @@ export default function Settings() {
     { id: 'users' as Section, label: 'إدارة المستخدمين', icon: Users },
     { id: 'types' as Section, label: 'أنواع الشكاوى', icon: Tags },
     { id: 'branches' as Section, label: 'الفروع', icon: GitBranch },
+    { id: 'email' as Section, label: 'البريد الإلكتروني', icon: Mail },
+    { id: 'points' as Section, label: 'نظام النقاط', icon: Star },
+    { id: 'appearance' as Section, label: 'المظهر', icon: Palette },
+    { id: 'security' as Section, label: 'الأمان', icon: Shield },
     { id: 'import' as Section, label: 'استيراد CSV', icon: Upload },
   ];
 
@@ -120,6 +148,7 @@ export default function Settings() {
 
         <Card className="col-span-1 md:col-span-3 bg-card rounded-2xl border-border/50 shadow-lg">
           <CardContent className="p-8">
+
             {section === 'company' && (
               <div className="space-y-6">
                 <h2 className="text-xl font-bold">معلومات الشركة الأساسية</h2>
@@ -136,9 +165,34 @@ export default function Settings() {
                     <label className="text-sm font-medium">العنوان</label>
                     <Input value={form.company_address} onChange={e => setForm(f => ({ ...f, company_address: e.target.value }))} className="h-12 bg-background/50 rounded-xl" placeholder="القاهرة، مصر" />
                   </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">المنطقة الزمنية</label>
+                    <select
+                      value={form.timezone}
+                      onChange={e => setForm(f => ({ ...f, timezone: e.target.value }))}
+                      className="w-full h-12 bg-background/50 border border-input rounded-xl px-3 text-sm text-foreground"
+                    >
+                      <option value="Africa/Cairo">Africa/Cairo (EET)</option>
+                      <option value="Asia/Riyadh">Asia/Riyadh (AST)</option>
+                      <option value="Asia/Dubai">Asia/Dubai (GST)</option>
+                      <option value="Europe/London">Europe/London (GMT)</option>
+                      <option value="UTC">UTC</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">لغة النظام الافتراضية</label>
+                    <select
+                      value={form.language}
+                      onChange={e => setForm(f => ({ ...f, language: e.target.value }))}
+                      className="w-full h-12 bg-background/50 border border-input rounded-xl px-3 text-sm text-foreground"
+                    >
+                      <option value="ar">العربية</option>
+                      <option value="en">English</option>
+                    </select>
+                  </div>
                 </div>
                 <div className="pt-6 border-t border-border/50 flex justify-end">
-                  <Button onClick={handleSave} className="rounded-xl bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 h-12 px-8">
+                  <Button onClick={() => handleSave()} className="rounded-xl bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 h-12 px-8">
                     <Save className="w-4 h-4 mr-2" /> حفظ التغييرات
                   </Button>
                 </div>
@@ -190,11 +244,11 @@ export default function Settings() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/30">
-                      {types.map((t: { id: number; name: string; description?: string }, i: number) => (
-                        <tr key={t.id} className="hover:bg-muted/20">
+                      {types.map((tp: { id: number; name: string; description?: string }, i: number) => (
+                        <tr key={tp.id} className="hover:bg-muted/20">
                           <td className="p-4 text-muted-foreground">{i + 1}</td>
-                          <td className="p-4 font-medium">{t.name}</td>
-                          <td className="p-4 text-muted-foreground text-xs">{t.description ?? '-'}</td>
+                          <td className="p-4 font-medium">{tp.name}</td>
+                          <td className="p-4 text-muted-foreground text-xs">{tp.description ?? '-'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -225,6 +279,272 @@ export default function Settings() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            )}
+
+            {section === 'email' && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-xl font-bold">إعدادات البريد الإلكتروني</h2>
+                  <p className="text-sm text-muted-foreground mt-1">إعداد EmailJS لإرسال الإشعارات والتنبيهات عبر البريد الإلكتروني</p>
+                </div>
+                <div className="grid grid-cols-1 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">معرّف الخدمة (Service ID)</label>
+                    <Input
+                      dir="ltr"
+                      value={form.emailjs_service_id}
+                      onChange={e => setForm(f => ({ ...f, emailjs_service_id: e.target.value }))}
+                      className="h-12 bg-background/50 rounded-xl font-mono"
+                      placeholder="service_xxxxxxx"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">معرّف القالب (Template ID)</label>
+                    <Input
+                      dir="ltr"
+                      value={form.emailjs_template_id}
+                      onChange={e => setForm(f => ({ ...f, emailjs_template_id: e.target.value }))}
+                      className="h-12 bg-background/50 rounded-xl font-mono"
+                      placeholder="template_xxxxxxx"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">المفتاح العام (Public Key)</label>
+                    <Input
+                      dir="ltr"
+                      value={form.emailjs_public_key}
+                      onChange={e => setForm(f => ({ ...f, emailjs_public_key: e.target.value }))}
+                      className="h-12 bg-background/50 rounded-xl font-mono"
+                      placeholder="xxxxxxxxxxxxxxxx"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <h3 className="text-base font-semibold">أحداث الإشعار</h3>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.notify_on_new_complaint}
+                      onChange={e => setForm(f => ({ ...f, notify_on_new_complaint: e.target.checked }))}
+                      className="w-4 h-4 rounded"
+                    />
+                    <span className="text-sm">إرسال بريد عند تسجيل شكوى جديدة</span>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.notify_on_escalation}
+                      onChange={e => setForm(f => ({ ...f, notify_on_escalation: e.target.checked }))}
+                      className="w-4 h-4 rounded"
+                    />
+                    <span className="text-sm">إرسال بريد عند تصعيد الشكوى</span>
+                  </label>
+                </div>
+                <div className="bg-muted/20 rounded-xl p-4">
+                  <p className="text-xs text-muted-foreground">احصل على بيانات الاعتماد من <span className="text-primary font-medium">emailjs.com</span> — أنشئ حساباً مجانياً، أضف خدمة بريد، ثم انسخ المعرّفات هنا.</p>
+                </div>
+                <div className="pt-4 border-t border-border/50 flex justify-end">
+                  <Button onClick={() => handleSave()} className="rounded-xl bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 h-12 px-8">
+                    <Save className="w-4 h-4 mr-2" /> حفظ الإعدادات
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {section === 'points' && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-xl font-bold">نظام نقاط الأداء</h2>
+                  <p className="text-sm text-muted-foreground mt-1">تحديد عدد النقاط الممنوحة أو المخصومة لكل إجراء في النظام</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">نقاط المتابعة (follow-up)</label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={form.points_follow_up}
+                      onChange={e => setForm(f => ({ ...f, points_follow_up: e.target.value }))}
+                      className="h-12 bg-background/50 rounded-xl"
+                      placeholder="10"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">نقاط حل الشكوى</label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={form.points_resolve_complaint}
+                      onChange={e => setForm(f => ({ ...f, points_resolve_complaint: e.target.value }))}
+                      className="h-12 bg-background/50 rounded-xl"
+                      placeholder="20"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">نقاط إغلاق الشكوى</label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={form.points_close_complaint}
+                      onChange={e => setForm(f => ({ ...f, points_close_complaint: e.target.value }))}
+                      className="h-12 bg-background/50 rounded-xl"
+                      placeholder="5"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-red-400">خصم نقاط عند التصعيد</label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={form.points_escalation_penalty}
+                      onChange={e => setForm(f => ({ ...f, points_escalation_penalty: e.target.value }))}
+                      className="h-12 bg-background/50 rounded-xl border-red-500/30"
+                      placeholder="5"
+                    />
+                  </div>
+                </div>
+                <div className="bg-muted/20 rounded-xl p-4">
+                  <p className="text-xs text-muted-foreground">تُستخدم النقاط لقياس أداء الموظفين. يتم تجميعها في لوحة التحليلات ضمن تقرير الأداء.</p>
+                </div>
+                <div className="pt-4 border-t border-border/50 flex justify-end">
+                  <Button onClick={() => handleSave()} className="rounded-xl bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 h-12 px-8">
+                    <Save className="w-4 h-4 mr-2" /> حفظ الإعدادات
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {section === 'appearance' && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-xl font-bold">إعدادات المظهر</h2>
+                  <p className="text-sm text-muted-foreground mt-1">تخصيص مظهر النظام ولون التمييز</p>
+                </div>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">السمة الافتراضية</label>
+                    <div className="flex gap-3">
+                      {[
+                        { value: 'dark', label: 'داكن (Dark)', desc: 'خلفية غامقة مريحة للعين' },
+                        { value: 'light', label: 'فاتح (Light)', desc: 'خلفية بيضاء كلاسيكية' },
+                      ].map(opt => (
+                        <button
+                          key={opt.value}
+                          onClick={() => setForm(f => ({ ...f, theme: opt.value }))}
+                          className={`flex-1 px-4 py-4 rounded-xl border text-sm text-right transition-all ${
+                            form.theme === opt.value
+                              ? 'bg-primary/10 border-primary/60 text-primary'
+                              : 'border-border/50 text-muted-foreground hover:bg-muted'
+                          }`}
+                        >
+                          <div className="font-medium">{opt.label}</div>
+                          <div className="text-xs mt-1 opacity-70">{opt.desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">لون التمييز (Accent Color)</label>
+                    <div className="flex items-center gap-4">
+                      <input
+                        type="color"
+                        value={form.accent_color}
+                        onChange={e => setForm(f => ({ ...f, accent_color: e.target.value }))}
+                        className="h-12 w-24 rounded-xl border border-input bg-background cursor-pointer"
+                      />
+                      <Input
+                        dir="ltr"
+                        value={form.accent_color}
+                        onChange={e => setForm(f => ({ ...f, accent_color: e.target.value }))}
+                        className="h-12 bg-background/50 rounded-xl font-mono w-40"
+                        placeholder="#6366f1"
+                      />
+                      <div className="flex gap-2">
+                        {['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'].map(c => (
+                          <button
+                            key={c}
+                            onClick={() => setForm(f => ({ ...f, accent_color: c }))}
+                            className="w-8 h-8 rounded-full border-2 transition-transform hover:scale-110"
+                            style={{ backgroundColor: c, borderColor: form.accent_color === c ? 'white' : 'transparent' }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="pt-4 border-t border-border/50 flex justify-end">
+                  <Button onClick={() => handleSave()} className="rounded-xl bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 h-12 px-8">
+                    <Save className="w-4 h-4 mr-2" /> حفظ التغييرات
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {section === 'security' && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-xl font-bold">إعدادات الأمان</h2>
+                  <p className="text-sm text-muted-foreground mt-1">التحكم في سياسات الأمان وتسجيل الدخول</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">مهلة الجلسة (بالدقائق)</label>
+                    <Input
+                      type="number"
+                      min="15"
+                      max="1440"
+                      value={form.session_timeout_minutes}
+                      onChange={e => setForm(f => ({ ...f, session_timeout_minutes: e.target.value }))}
+                      className="h-12 bg-background/50 rounded-xl"
+                      placeholder="60"
+                    />
+                    <p className="text-xs text-muted-foreground">يُسجَّل المستخدم خارجاً تلقائياً بعد هذه المدة من عدم النشاط</p>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">أقصى محاولات تسجيل دخول فاشلة</label>
+                    <Input
+                      type="number"
+                      min="3"
+                      max="20"
+                      value={form.max_login_attempts}
+                      onChange={e => setForm(f => ({ ...f, max_login_attempts: e.target.value }))}
+                      className="h-12 bg-background/50 rounded-xl"
+                      placeholder="5"
+                    />
+                    <p className="text-xs text-muted-foreground">يُوقَف الحساب مؤقتاً بعد هذا العدد من المحاولات الفاشلة</p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <label className="flex items-center gap-3 cursor-pointer p-4 rounded-xl border border-border/50 hover:bg-muted/20">
+                    <input
+                      type="checkbox"
+                      checked={form.require_2fa}
+                      onChange={e => setForm(f => ({ ...f, require_2fa: e.target.checked }))}
+                      className="w-4 h-4 rounded"
+                    />
+                    <div>
+                      <span className="text-sm font-medium block">المصادقة الثنائية (2FA)</span>
+                      <span className="text-xs text-muted-foreground">إلزام جميع المستخدمين بالمصادقة الثنائية عند تسجيل الدخول</span>
+                    </div>
+                  </label>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Google OAuth — معرّف العميل (Client ID)</label>
+                  <Input
+                    dir="ltr"
+                    value={form.google_oauth_client_id}
+                    onChange={e => setForm(f => ({ ...f, google_oauth_client_id: e.target.value }))}
+                    className="h-12 bg-background/50 rounded-xl font-mono"
+                    placeholder="xxxxxxxx.apps.googleusercontent.com"
+                  />
+                  <p className="text-xs text-muted-foreground">للسماح بتسجيل الدخول عبر حسابات Google. احصل عليه من Google Cloud Console.</p>
+                </div>
+                <div className="pt-4 border-t border-border/50 flex justify-end">
+                  <Button onClick={() => handleSave()} className="rounded-xl bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 h-12 px-8">
+                    <Save className="w-4 h-4 mr-2" /> حفظ الإعدادات
+                  </Button>
                 </div>
               </div>
             )}
@@ -312,6 +632,7 @@ export default function Settings() {
                 </div>
               </div>
             )}
+
           </CardContent>
         </Card>
       </div>

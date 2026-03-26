@@ -13,3 +13,4 @@ export * from "./branch_change_logs";
 export * from "./import_logs";
 export * from "./settings";
 export * from "./notifications";
+export * from "./rating_questions";

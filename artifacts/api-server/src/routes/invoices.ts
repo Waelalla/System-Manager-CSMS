@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { invoicesTable, customersTable, productsTable, branchesTable, followUpsTable } from "@workspace/db";
-import { eq, count, and, sql, SQL } from "drizzle-orm";
+import { invoicesTable, customersTable, productsTable, branchesTable, followUpsTable, complaintsTable, complaintTypesTable } from "@workspace/db";
+import { eq, count, and, sql, SQL, desc } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth.js";
 import { parsePagination, buildPaginated } from "../lib/pagination.js";
 import { validateBody } from "../lib/validate.js";
@@ -106,6 +106,9 @@ router.get("/:id", requireAuth, async (req, res) => {
         product_name: productsTable.name,
         customer_id: invoicesTable.customer_id,
         customer_name: customersTable.name,
+        customer_phone: customersTable.phone,
+        customer_type: customersTable.type,
+        customer_governorate: customersTable.governorate,
         branch_name: branchesTable.name,
         created_at: invoicesTable.created_at,
       })
@@ -116,7 +119,27 @@ router.get("/:id", requireAuth, async (req, res) => {
       .where(eq(invoicesTable.id, id))
       .limit(1);
     if (!invoice) { res.status(404).json({ error: "Not Found" }); return; }
-    res.json(invoice);
+
+    let last_complaint = null;
+    if (invoice.customer_id) {
+      const [complaint] = await db
+        .select({
+          id: complaintsTable.id,
+          status: complaintsTable.status,
+          priority: complaintsTable.priority,
+          description: complaintsTable.description,
+          created_at: complaintsTable.created_at,
+          type_name: complaintTypesTable.name,
+        })
+        .from(complaintsTable)
+        .leftJoin(complaintTypesTable, eq(complaintsTable.type_id, complaintTypesTable.id))
+        .where(eq(complaintsTable.customer_id, invoice.customer_id))
+        .orderBy(desc(complaintsTable.created_at))
+        .limit(1);
+      last_complaint = complaint ?? null;
+    }
+
+    res.json({ ...invoice, last_complaint });
   } catch (err) {
     req.log.error({ err }, "Get invoice error");
     res.status(500).json({ error: "Internal Server Error" });

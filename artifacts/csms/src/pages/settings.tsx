@@ -17,10 +17,57 @@ import {
   useListRoles,
   ComplaintTypeFieldType,
 } from '@workspace/api-client-react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 
-type Section = 'company' | 'users' | 'types' | 'branches' | 'import' | 'email' | 'points' | 'appearance' | 'security';
+type RatingQuestion = { id: number; text: string; sort_order: number; is_active: boolean };
+
+function useRatingQuestions() {
+  return useQuery<RatingQuestion[]>({
+    queryKey: ['ratingQuestions'],
+    queryFn: async () => {
+      const token = localStorage.getItem('access_token');
+      const res = await fetch('/api/rating-questions', { headers: { Authorization: `Bearer ${token}` } });
+      const json = await res.json();
+      return (json.data ?? []) as RatingQuestion[];
+    },
+  });
+}
+
+function useCreateRatingQuestion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { text: string; sort_order?: number }) => {
+      const token = localStorage.getItem('access_token');
+      const res = await fetch('/api/rating-questions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error('فشل الإضافة');
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['ratingQuestions'] }),
+  });
+}
+
+function useDeleteRatingQuestion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const token = localStorage.getItem('access_token');
+      const res = await fetch(`/api/rating-questions/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('فشل الحذف');
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['ratingQuestions'] }),
+  });
+}
+
+type Section = 'company' | 'users' | 'types' | 'branches' | 'import' | 'email' | 'points' | 'appearance' | 'security' | 'rating';
 
 interface ImportResult {
   added_customers?: number;
@@ -65,6 +112,32 @@ export default function Settings() {
   const { mutateAsync: createUser } = useCreateUser();
   const { mutateAsync: updateUser } = useUpdateUser();
   const { mutateAsync: deleteUser } = useDeleteUser();
+
+  const { data: ratingQuestions, isLoading: loadingRQ } = useRatingQuestions();
+  const { mutateAsync: createRatingQ, isPending: addingRQ } = useCreateRatingQuestion();
+  const { mutateAsync: deleteRatingQ } = useDeleteRatingQuestion();
+  const [newQuestionText, setNewQuestionText] = useState('');
+
+  const handleAddRatingQuestion = async () => {
+    if (!newQuestionText.trim()) return;
+    try {
+      await createRatingQ({ text: newQuestionText.trim(), sort_order: (ratingQuestions?.length ?? 0) });
+      setNewQuestionText('');
+      toast({ title: 'تم الإضافة', description: 'تم إضافة السؤال بنجاح' });
+    } catch {
+      toast({ title: 'خطأ', description: 'فشل في إضافة السؤال', variant: 'destructive' });
+    }
+  };
+
+  const handleDeleteRatingQuestion = async (id: number) => {
+    if (!confirm('هل أنت متأكد من حذف هذا السؤال؟')) return;
+    try {
+      await deleteRatingQ(id);
+      toast({ title: 'تم الحذف' });
+    } catch {
+      toast({ title: 'خطأ', description: 'فشل في الحذف', variant: 'destructive' });
+    }
+  };
 
   const [showTypeForm, setShowTypeForm] = useState(false);
   const [typeFormMode, setTypeFormMode] = useState<'add' | 'edit'>('add');
@@ -301,6 +374,7 @@ export default function Settings() {
     { id: 'users' as Section, label: 'إدارة المستخدمين', icon: Users },
     { id: 'types' as Section, label: 'أنواع الشكاوى', icon: Tags },
     { id: 'branches' as Section, label: 'الفروع', icon: GitBranch },
+    { id: 'rating' as Section, label: 'أسئلة التقييم', icon: Star },
     { id: 'email' as Section, label: 'البريد الإلكتروني', icon: Mail },
     { id: 'points' as Section, label: 'نظام النقاط', icon: Star },
     { id: 'appearance' as Section, label: 'المظهر', icon: Palette },
@@ -1083,6 +1157,86 @@ export default function Settings() {
                   <Button onClick={() => handleSave()} className="rounded-xl bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 h-12 px-8">
                     <Save className="w-4 h-4 mr-2" /> حفظ الإعدادات
                   </Button>
+                </div>
+              </div>
+            )}
+
+            {section === 'rating' && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-bold">أسئلة التقييم</h2>
+                    <p className="text-muted-foreground text-sm mt-1">الأسئلة التي يطرحها الموظف على العميل أثناء متابعة الفاتورة</p>
+                  </div>
+                  <span className="text-sm text-muted-foreground bg-muted/50 px-3 py-1 rounded-full">
+                    {ratingQuestions?.length ?? 0} سؤال
+                  </span>
+                </div>
+
+                <div className="flex gap-3">
+                  <Input
+                    value={newQuestionText}
+                    onChange={e => setNewQuestionText(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleAddRatingQuestion()}
+                    placeholder="أدخل نص السؤال الجديد..."
+                    className="rounded-xl h-11 bg-background/60 border-border/50 flex-1"
+                  />
+                  <Button
+                    onClick={handleAddRatingQuestion}
+                    disabled={!newQuestionText.trim() || addingRQ}
+                    className="rounded-xl h-11 px-5 bg-primary hover:bg-primary/90 text-white gap-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    {addingRQ ? 'جاري الإضافة...' : 'إضافة سؤال'}
+                  </Button>
+                </div>
+
+                <div className="rounded-xl border border-border/50 overflow-hidden">
+                  {loadingRQ ? (
+                    <div className="p-8 text-center text-muted-foreground animate-pulse">جاري التحميل...</div>
+                  ) : !ratingQuestions?.length ? (
+                    <div className="p-8 text-center text-muted-foreground">
+                      <Star className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                      <p className="text-sm">لا توجد أسئلة تقييم بعد</p>
+                      <p className="text-xs mt-1">أضف أسئلة التقييم لاستخدامها في متابعة الفواتير</p>
+                    </div>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/30">
+                        <tr>
+                          <th className="text-right py-3 px-4 font-semibold text-muted-foreground">#</th>
+                          <th className="text-right py-3 px-4 font-semibold text-muted-foreground">نص السؤال</th>
+                          <th className="py-3 px-4"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/30">
+                        {ratingQuestions.map((q, idx) => (
+                          <tr key={q.id} className="hover:bg-muted/10 transition-colors">
+                            <td className="py-3 px-4 text-muted-foreground font-medium w-10">{idx + 1}</td>
+                            <td className="py-3 px-4 font-medium leading-relaxed">{q.text}</td>
+                            <td className="py-3 px-4 text-left">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                                onClick={() => handleDeleteRatingQuestion(q.id)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+
+                <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-4 text-sm text-blue-400">
+                  <p className="font-medium mb-1">كيف تعمل أسئلة التقييم؟</p>
+                  <p className="text-xs text-blue-400/80">
+                    عند فتح تفاصيل فاتورة في صفحة متابعة الفواتير، تظهر هذه الأسئلة مع نجوم تقييم لكل سؤال.
+                    يقرأ الموظف السؤال للعميل ويسجّل إجابته، ثم يحفظ المتابعة مع كامل التقييم.
+                  </p>
                 </div>
               </div>
             )}

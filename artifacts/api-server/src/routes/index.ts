@@ -8,6 +8,7 @@ import productsRouter from "./products.js";
 import customersRouter from "./customers.js";
 import invoicesRouter from "./invoices.js";
 import complaintTypesRouter from "./complaint_types.js";
+import ratingQuestionsRouter from "./rating_questions.js";
 import complaintsRouter from "./complaints.js";
 import followUpsRouter from "./follow_ups.js";
 import importRouter from "./import.js";
@@ -35,6 +36,7 @@ router.use("/import-logs", importLogsRouter);
 router.use("/notifications", notificationsRouter);
 router.use("/analytics", analyticsRouter);
 router.use("/settings", settingsRouter);
+router.use("/rating-questions", ratingQuestionsRouter);
 router.use("/branch-change-logs", branchChangeLogsRouter);
 
 export default router;

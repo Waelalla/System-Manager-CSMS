@@ -7,7 +7,7 @@ import {
 import { useTranslation } from '@/lib/i18n';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
-import { Plus, Upload, Search, Edit, Trash2, Eye, X, User, Phone, MapPin, Building2, FileText, AlertCircle } from 'lucide-react';
+import { Plus, Upload, Search, Edit, Trash2, Eye, X, User, Phone, MapPin, Building2, FileText, AlertCircle, Download, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -33,13 +33,47 @@ export default function Customers() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [branchId, setBranchId] = useState('');
+  const [minAmount, setMinAmount] = useState('');
+  const [exporting, setExporting] = useState(false);
   const [profileId, setProfileId] = useState<number | null>(null);
   const [editCustomer, setEditCustomer] = useState<{ id: number } & CustomerForm | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data, isLoading } = useListCustomers({ page, limit: 10, search, branch_id: branchId ? parseInt(branchId) : undefined });
+  const listParams = {
+    page, limit: 10, search,
+    branch_id: branchId ? parseInt(branchId) : undefined,
+    ...(minAmount ? { min_total_amount: minAmount } : {}),
+  } as Parameters<typeof useListCustomers>[0];
+
+  const { data, isLoading } = useListCustomers(listParams);
+
+  const handleExportExcel = async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (search) params.append('search', search);
+      if (branchId) params.append('branch_id', branchId);
+      if (minAmount) params.append('min_total_amount', minAmount);
+      const token = localStorage.getItem('access_token');
+      const res = await fetch(`/api/customers/export-excel?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('فشل التصدير');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `customers-${Date.now()}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({ title: 'خطأ', description: 'فشل تصدير ملف Excel', variant: 'destructive' });
+    } finally {
+      setExporting(false);
+    }
+  };
   const { data: branchesData } = useListBranches({ query: { queryKey: ['listBranchesCustomers'] } });
   const branches = branchesData?.data ?? [];
   const { mutateAsync: deleteCustomer, isPending: deleting } = useDeleteCustomer();
@@ -72,26 +106,54 @@ export default function Customers() {
         </div>
       </div>
 
-      <div className="bg-card rounded-2xl p-4 shadow-sm border border-border/50 flex flex-wrap gap-4 items-center">
-        <div className="relative flex-1 min-w-[250px]">
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+      <div className="bg-card rounded-2xl p-4 shadow-sm border border-border/50 flex flex-wrap gap-3 items-center">
+        <div className="relative flex-1 min-w-[220px]">
+          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder={t('common.search')}
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            className="pl-4 pr-10 rounded-xl bg-background/50 border-border/50 h-11"
+            className="pl-4 pr-10 rounded-xl bg-background/50 border-border/50 h-10"
           />
         </div>
         <select
           value={branchId}
           onChange={e => { setBranchId(e.target.value); setPage(1); }}
-          className="h-11 px-4 rounded-xl bg-background/50 border border-border/50 text-foreground outline-none focus:ring-2 focus:ring-primary/20"
+          className="h-10 px-3 rounded-xl bg-background/50 border border-border/50 text-foreground outline-none focus:ring-2 focus:ring-primary/20 text-sm"
         >
           <option value="">كل الفروع</option>
           {branches.map((b: { id: number; name: string }) => (
             <option key={b.id} value={String(b.id)}>{b.name}</option>
           ))}
         </select>
+        <div className="relative min-w-[180px]">
+          <Filter className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            type="number"
+            placeholder="الحد الأدنى للمشتريات"
+            value={minAmount}
+            onChange={e => { setMinAmount(e.target.value); setPage(1); }}
+            className="pl-4 pr-10 rounded-xl bg-background/50 border-border/50 h-10 text-sm"
+          />
+        </div>
+        {(search || branchId || minAmount) && (
+          <Button
+            variant="ghost"
+            onClick={() => { setSearch(''); setBranchId(''); setMinAmount(''); setPage(1); }}
+            className="rounded-xl h-10 text-xs text-muted-foreground hover:text-foreground px-3"
+          >
+            <X className="w-3.5 h-3.5 ml-1" /> مسح الفلاتر
+          </Button>
+        )}
+        <Button
+          variant="outline"
+          onClick={handleExportExcel}
+          disabled={exporting}
+          className="rounded-xl h-10 gap-2 text-sm mr-auto"
+        >
+          <Download className="w-4 h-4" />
+          {exporting ? 'جاري التصدير...' : 'تصدير Excel'}
+        </Button>
       </div>
 
       <div className="bg-card rounded-2xl shadow-lg shadow-black/5 border border-border/50 overflow-hidden">

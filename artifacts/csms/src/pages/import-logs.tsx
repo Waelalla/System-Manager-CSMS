@@ -1,25 +1,8 @@
 import { useState } from 'react';
-import { useListImportLogs, useGetImportLog } from '@workspace/api-client-react';
+import { useListImportLogs, useGetImportLog, type ImportLogItem, type ImportLogItemWarningsItem } from '@workspace/api-client-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Upload, ChevronLeft, ChevronRight, CheckCircle, AlertTriangle, Clock, X } from 'lucide-react';
-
-type ImportLog = {
-  id: number;
-  file_name?: string;
-  mode?: string;
-  status?: string;
-  total_rows?: number;
-  success_rows?: number;
-  error_rows?: number;
-  created_at?: string;
-};
-
-const statusMap: Record<string, { label: string; color: string; icon: typeof CheckCircle }> = {
-  completed: { label: 'مكتمل', color: 'text-green-400', icon: CheckCircle },
-  processing: { label: 'جاري المعالجة', color: 'text-yellow-400', icon: Clock },
-  failed: { label: 'فشل', color: 'text-red-400', icon: X },
-};
+import { Upload, ChevronLeft, ChevronRight, CheckCircle, AlertTriangle, Clock } from 'lucide-react';
 
 export default function ImportLogs() {
   const [page, setPage] = useState(1);
@@ -28,7 +11,7 @@ export default function ImportLogs() {
   const { data, isLoading } = useListImportLogs({ page, limit: 20 });
   const { data: detail } = useGetImportLog(detailId!, { query: { queryKey: ['getImportLog', detailId], enabled: !!detailId } });
 
-  const logs: ImportLog[] = (data?.data ?? []) as ImportLog[];
+  const logs: ImportLogItem[] = data?.data ?? [];
   const total = data?.meta?.total ?? 0;
   const totalPages = Math.ceil(total / 20);
 
@@ -59,38 +42,46 @@ export default function ImportLogs() {
                     <thead className="border-b border-border/50 bg-muted/20">
                       <tr>
                         <th className="text-right p-4 font-medium text-muted-foreground">اسم الملف</th>
-                        <th className="text-right p-4 font-medium text-muted-foreground">النوع</th>
-                        <th className="text-right p-4 font-medium text-muted-foreground">الحالة</th>
-                        <th className="text-right p-4 font-medium text-muted-foreground">ناجح/إجمالي</th>
+                        <th className="text-right p-4 font-medium text-muted-foreground">المستخدم</th>
+                        <th className="text-right p-4 font-medium text-muted-foreground">عملاء/فواتير</th>
+                        <th className="text-right p-4 font-medium text-muted-foreground">تحذيرات</th>
                         <th className="text-right p-4 font-medium text-muted-foreground">التاريخ</th>
                         <th className="p-4"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/30">
-                      {logs.map(log => {
-                        const s = statusMap[log.status ?? ''] ?? { label: log.status ?? '-', color: 'text-muted-foreground', icon: Clock };
-                        return (
-                          <tr key={log.id} className={`hover:bg-muted/10 transition-colors cursor-pointer ${detailId === log.id ? 'bg-primary/5' : ''}`} onClick={() => setDetailId(log.id)}>
-                            <td className="p-4 font-medium">{log.file_name ?? 'ملف CSV'}</td>
-                            <td className="p-4 text-muted-foreground text-xs">{log.mode ?? '-'}</td>
-                            <td className="p-4">
-                              <span className={`flex items-center gap-1 text-xs font-medium ${s.color}`}>
-                                <s.icon className="w-3 h-3" /> {s.label}
+                      {logs.map(log => (
+                        <tr
+                          key={log.id}
+                          className={`hover:bg-muted/10 transition-colors cursor-pointer ${detailId === log.id ? 'bg-primary/5' : ''}`}
+                          onClick={() => setDetailId(log.id)}
+                        >
+                          <td className="p-4 font-medium">{log.file_name}</td>
+                          <td className="p-4 text-muted-foreground text-xs">{log.user_name ?? '-'}</td>
+                          <td className="p-4 text-sm">
+                            <span className="text-green-400 font-bold">{log.added_customers ?? 0}</span>
+                            <span className="text-muted-foreground"> / </span>
+                            <span className="text-accent font-bold">{log.added_invoices ?? 0}</span>
+                          </td>
+                          <td className="p-4">
+                            {(log.warnings?.length ?? 0) > 0 ? (
+                              <span className="flex items-center gap-1 text-xs text-yellow-400">
+                                <AlertTriangle className="w-3 h-3" /> {log.warnings!.length}
                               </span>
-                            </td>
-                            <td className="p-4 text-sm">
-                              <span className="text-green-400">{log.success_rows ?? 0}</span>
-                              <span className="text-muted-foreground">/{log.total_rows ?? 0}</span>
-                            </td>
-                            <td className="p-4 text-muted-foreground text-xs">
-                              {log.created_at ? new Date(log.created_at).toLocaleString('ar-EG') : '-'}
-                            </td>
-                            <td className="p-4">
-                              <Button size="sm" variant="ghost" className="rounded-lg h-8 text-xs text-primary">تفاصيل</Button>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                            ) : (
+                              <span className="flex items-center gap-1 text-xs text-green-400">
+                                <CheckCircle className="w-3 h-3" /> نظيف
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-4 text-muted-foreground text-xs">
+                            {log.imported_at ? new Date(log.imported_at).toLocaleString('ar-EG') : '-'}
+                          </td>
+                          <td className="p-4">
+                            <Button size="sm" variant="ghost" className="rounded-lg h-8 text-xs text-primary">تفاصيل</Button>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -118,7 +109,7 @@ export default function ImportLogs() {
             <CardContent className="p-6">
               {!detailId ? (
                 <div className="text-center py-8">
-                  <AlertTriangle className="w-8 h-8 text-muted-foreground mx-auto mb-3 opacity-30" />
+                  <Clock className="w-8 h-8 text-muted-foreground mx-auto mb-3 opacity-30" />
                   <p className="text-sm text-muted-foreground">اختر سجلاً لعرض التفاصيل</p>
                 </div>
               ) : detail ? (
@@ -127,28 +118,48 @@ export default function ImportLogs() {
                   <div className="space-y-3 text-sm">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">الملف</span>
-                      <span className="font-medium">{(detail as ImportLog).file_name ?? '-'}</span>
+                      <span className="font-medium text-xs truncate max-w-32">{detail.file_name}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">إجمالي الصفوف</span>
-                      <span className="font-bold">{(detail as ImportLog).total_rows ?? 0}</span>
+                      <span className="font-bold">{detail.total_rows}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">ناجح</span>
-                      <span className="font-bold text-green-400">{(detail as ImportLog).success_rows ?? 0}</span>
+                      <span className="text-muted-foreground">عملاء مضافون</span>
+                      <span className="font-bold text-green-400">{detail.added_customers ?? 0}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">فاشل</span>
-                      <span className="font-bold text-red-400">{(detail as ImportLog).error_rows ?? 0}</span>
+                      <span className="text-muted-foreground">فواتير مضافة</span>
+                      <span className="font-bold text-accent">{detail.added_invoices ?? 0}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">فواتير مكررة</span>
+                      <span className="font-bold text-yellow-400">{detail.duplicate_invoices ?? 0}</span>
                     </div>
                   </div>
-                  {(detail as { errors?: { row: number; message: string }[] }).errors && (
+                  {(detail.warnings?.length ?? 0) > 0 && (
                     <div className="mt-4 space-y-2">
-                      <h4 className="text-sm font-bold text-red-400 flex items-center gap-1"><AlertTriangle className="w-4 h-4" /> أخطاء الاستيراد</h4>
+                      <h4 className="text-sm font-bold text-yellow-400 flex items-center gap-1">
+                        <AlertTriangle className="w-4 h-4" /> تحذيرات ({detail.warnings!.length})
+                      </h4>
                       <div className="max-h-48 overflow-y-auto space-y-1">
-                        {((detail as { errors?: { row: number; message: string }[] }).errors ?? []).map((err, i) => (
+                        {detail.warnings!.map((w: ImportLogItemWarningsItem, i: number) => (
+                          <div key={i} className="text-xs p-2 rounded-lg bg-yellow-500/10 text-yellow-300">
+                            صف {(w as { row?: number }).row ?? i + 1}: {(w as { reason?: string }).reason ?? 'تحذير'}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {(detail.errors?.length ?? 0) > 0 && (
+                    <div className="mt-4 space-y-2">
+                      <h4 className="text-sm font-bold text-red-400 flex items-center gap-1">
+                        <AlertTriangle className="w-4 h-4" /> أخطاء ({detail.errors!.length})
+                      </h4>
+                      <div className="max-h-48 overflow-y-auto space-y-1">
+                        {detail.errors!.map((e, i: number) => (
                           <div key={i} className="text-xs p-2 rounded-lg bg-red-500/10 text-red-300">
-                            صف {err.row}: {err.message}
+                            {String((e as { message?: string }).message ?? (e as { reason?: string }).reason ?? JSON.stringify(e))}
                           </div>
                         ))}
                       </div>

@@ -11,8 +11,11 @@ import { useToast } from '@/hooks/use-toast';
 type Section = 'company' | 'users' | 'types' | 'branches' | 'import';
 
 interface ImportResult {
-  inserted?: number;
-  skipped?: number;
+  added_customers?: number;
+  updated_customers?: number;
+  added_invoices?: number;
+  duplicate_invoices?: number;
+  warnings?: { row?: number; field?: string; reason?: string }[];
   errors?: string[];
 }
 
@@ -66,7 +69,7 @@ export default function Settings() {
       const json = await res.json() as ImportResult & { error?: string };
       if (!res.ok) throw new Error(json.error || 'فشل الاستيراد');
       setImportResult(json);
-      toast({ title: 'تم الاستيراد', description: `تم إدخال ${json.inserted ?? 0} سجل بنجاح` });
+      toast({ title: 'تم الاستيراد', description: `تم إضافة ${json.added_customers ?? 0} عميل و${json.added_invoices ?? 0} فاتورة` });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'حدث خطأ';
       toast({ title: 'خطأ', description: msg, variant: 'destructive' });
@@ -279,7 +282,17 @@ export default function Settings() {
                       {importResult.errors?.length ? <AlertCircle className="w-5 h-5 text-red-500" /> : <CheckCircle2 className="w-5 h-5 text-green-500" />}
                       <p className="font-medium text-sm">نتيجة الاستيراد</p>
                     </div>
-                    <p className="text-sm text-muted-foreground">تم إدخال: <span className="text-green-500 font-bold">{importResult.inserted ?? 0}</span> سجل | تم تجاهل: <span className="text-yellow-500 font-bold">{importResult.skipped ?? 0}</span> سجل</p>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <span className="text-muted-foreground">عملاء مضافون:</span>
+                      <span className="text-green-500 font-bold">{importResult.added_customers ?? 0}</span>
+                      <span className="text-muted-foreground">فواتير مضافة:</span>
+                      <span className="text-accent font-bold">{importResult.added_invoices ?? 0}</span>
+                      <span className="text-muted-foreground">فواتير مكررة:</span>
+                      <span className="text-yellow-500 font-bold">{importResult.duplicate_invoices ?? 0}</span>
+                    </div>
+                    {(importResult.warnings?.length ?? 0) > 0 && (
+                      <p className="text-xs text-yellow-400 mt-2">{importResult.warnings!.length} تحذير — تحقق من سجلات الاستيراد للتفاصيل</p>
+                    )}
                     {importResult.errors?.slice(0, 3).map((e, i) => (
                       <p key={i} className="text-xs text-red-400 mt-1">{e}</p>
                     ))}

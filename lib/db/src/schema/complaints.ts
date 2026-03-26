@@ -21,6 +21,7 @@ export const complaintsTable = pgTable("complaints", {
   status: text("status").notNull().default("جديدة"),
   assigned_to_id: integer("assigned_to_id").references(() => usersTable.id),
   escalated_to_id: integer("escalated_to_id").references(() => usersTable.id),
+  resolved_at: timestamp("resolved_at"),
   created_at: timestamp("created_at").defaultNow().notNull(),
 });
 

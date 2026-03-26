@@ -1,9 +1,11 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { customersTable, branchesTable, invoicesTable, branchChangeLogsTable } from "@workspace/db";
-import { eq, count, ilike, and, sql } from "drizzle-orm";
-import { requireAuth, type AuthRequest } from "../lib/auth.js";
+import { eq, count, and, sql } from "drizzle-orm";
+import { requireAuth, requireRole, type AuthRequest } from "../lib/auth.js";
 import { parsePagination, buildPaginated } from "../lib/pagination.js";
+import { validateBody } from "../lib/validate.js";
+import { CreateCustomerBody, UpdateCustomerBody } from "@workspace/api-zod";
 
 const router = Router();
 
@@ -88,7 +90,7 @@ router.get("/", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/", requireAuth, async (req, res) => {
+router.post("/", requireAuth, requireRole("Customer Service Agent", "Manager/Voter", "Manager"), validateBody(CreateCustomerBody), async (req, res) => {
   try {
     const { code, name, phone, type, governorate, branch_id, address } = req.body;
     if (!name || !phone || !type || !governorate || !branch_id) {
@@ -107,7 +109,7 @@ router.post("/", requireAuth, async (req, res) => {
 
 router.get("/:id", requireAuth, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     const [customer] = await db
       .select({ id: customersTable.id, code: customersTable.code, name: customersTable.name, phone: customersTable.phone, type: customersTable.type, governorate: customersTable.governorate, branch_id: customersTable.branch_id, branch_name: branchesTable.name, address: customersTable.address })
       .from(customersTable)
@@ -122,9 +124,9 @@ router.get("/:id", requireAuth, async (req, res) => {
   }
 });
 
-router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
+router.put("/:id", requireAuth, requireRole("Customer Service Agent", "Manager/Voter", "Manager"), validateBody(UpdateCustomerBody), async (req: AuthRequest, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     const { name, phone, type, governorate, branch_id, address } = req.body;
 
     const [existing] = await db.select().from(customersTable).where(eq(customersTable.id, id)).limit(1);
@@ -155,9 +157,9 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
-router.delete("/:id", requireAuth, async (req, res) => {
+router.delete("/:id", requireAuth, requireRole("Manager"), async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     await db.delete(customersTable).where(eq(customersTable.id, id));
     res.json({ success: true, message: "Customer deleted" });
   } catch (err) {

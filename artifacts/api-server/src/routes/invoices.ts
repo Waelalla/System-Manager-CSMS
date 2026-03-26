@@ -2,8 +2,10 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { invoicesTable, customersTable, productsTable, branchesTable, followUpsTable } from "@workspace/db";
 import { eq, count, and, sql, SQL } from "drizzle-orm";
-import { requireAuth } from "../lib/auth.js";
+import { requireAuth, requireRole } from "../lib/auth.js";
 import { parsePagination, buildPaginated } from "../lib/pagination.js";
+import { validateBody } from "../lib/validate.js";
+import { CreateInvoiceBody } from "@workspace/api-zod";
 
 const router = Router();
 
@@ -68,7 +70,7 @@ router.get("/", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/", requireAuth, async (req, res) => {
+router.post("/", requireAuth, requireRole("Accountant", "Manager/Voter", "Manager"), validateBody(CreateInvoiceBody), async (req, res) => {
   try {
     const { invoice_number, invoice_date, amount, status, product_id, customer_id } = req.body;
     if (!invoice_number || !invoice_date || !amount || !status || !customer_id) {
@@ -92,7 +94,7 @@ router.post("/", requireAuth, async (req, res) => {
 
 router.get("/:id", requireAuth, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     const [invoice] = await db
       .select({
         id: invoicesTable.id,
@@ -121,9 +123,9 @@ router.get("/:id", requireAuth, async (req, res) => {
   }
 });
 
-router.put("/:id", requireAuth, async (req, res) => {
+router.put("/:id", requireAuth, requireRole("Accountant", "Manager/Voter", "Manager"), async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     const { invoice_number, invoice_date, amount, status, product_id } = req.body;
     const updates: Record<string, unknown> = {};
     if (invoice_number) updates.invoice_number = invoice_number;
@@ -141,9 +143,9 @@ router.put("/:id", requireAuth, async (req, res) => {
   }
 });
 
-router.delete("/:id", requireAuth, async (req, res) => {
+router.delete("/:id", requireAuth, requireRole("Manager"), async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     await db.delete(invoicesTable).where(eq(invoicesTable.id, id));
     res.json({ success: true, message: "Invoice deleted" });
   } catch (err) {

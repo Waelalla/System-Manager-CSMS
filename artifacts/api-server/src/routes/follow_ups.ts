@@ -2,7 +2,9 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { followUpsTable, invoicesTable, customersTable, usersTable, branchesTable } from "@workspace/db";
 import { eq, count } from "drizzle-orm";
-import { requireAuth, type AuthRequest } from "../lib/auth.js";
+import { requireAuth, requireRole, type AuthRequest } from "../lib/auth.js";
+import { validateBody } from "../lib/validate.js";
+import { CreateFollowUpBody } from "@workspace/api-zod";
 import { parsePagination, buildPaginated } from "../lib/pagination.js";
 
 const router = Router();
@@ -45,7 +47,7 @@ router.get("/", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/", requireAuth, async (req: AuthRequest, res) => {
+router.post("/", requireAuth, requireRole("Accountant", "Customer Service Agent", "Manager/Voter", "Manager"), validateBody(CreateFollowUpBody), async (req: AuthRequest, res) => {
   try {
     const { invoice_ids, notes, assigned_user_id } = req.body;
     if (!invoice_ids || !Array.isArray(invoice_ids) || !assigned_user_id) {

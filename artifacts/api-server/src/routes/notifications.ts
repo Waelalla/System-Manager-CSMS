@@ -36,23 +36,19 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
-router.post("/:id/read", requireAuth, async (req: AuthRequest, res) => {
+router.post("/mark-read", requireAuth, async (req: AuthRequest, res) => {
   try {
-    const id = parseInt(req.params.id);
-    await db.update(notificationsTable).set({ is_read: true }).where(and(eq(notificationsTable.id, id), eq(notificationsTable.user_id, req.user!.userId)));
+    const { ids, all } = req.body as { ids?: number[]; all?: boolean };
+    const userId = req.user!.userId;
+    if (all) {
+      await db.update(notificationsTable).set({ is_read: true }).where(eq(notificationsTable.user_id, userId));
+    } else if (ids && ids.length > 0) {
+      const { inArray } = await import("drizzle-orm");
+      await db.update(notificationsTable).set({ is_read: true }).where(and(eq(notificationsTable.user_id, userId), inArray(notificationsTable.id, ids)));
+    }
     res.json({ success: true });
   } catch (err) {
-    req.log.error({ err }, "Mark notification read error");
-    res.status(500).json({ error: "Internal Server Error" });
-  }
-});
-
-router.post("/read-all", requireAuth, async (req: AuthRequest, res) => {
-  try {
-    await db.update(notificationsTable).set({ is_read: true }).where(eq(notificationsTable.user_id, req.user!.userId));
-    res.json({ success: true });
-  } catch (err) {
-    req.log.error({ err }, "Mark all read error");
+    req.log.error({ err }, "Mark notifications read error");
     res.status(500).json({ error: "Internal Server Error" });
   }
 });

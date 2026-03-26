@@ -5,7 +5,8 @@ import { useAuth } from '@/lib/auth';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   LayoutDashboard, Users, FileText, PhoneCall, AlertTriangle, 
-  BarChart3, Settings, LogOut, User, Bell, Menu, X, Globe, Moon, Sun, Shield
+  BarChart3, Settings, LogOut, User, Bell, Menu, X, Globe, Moon, Sun, Shield,
+  GitBranch, Upload
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -75,6 +76,8 @@ function Sidebar() {
     { href: '/follow-ups', icon: PhoneCall, label: t('nav.followUps') },
     { href: '/complaints', icon: AlertTriangle, label: t('nav.complaints') },
     { href: '/analytics', icon: BarChart3, label: t('nav.analytics') },
+    { href: '/branch-change-logs', icon: GitBranch, label: 'تغييرات الفروع' },
+    { href: '/import-logs', icon: Upload, label: 'سجلات الاستيراد' },
     { href: '/settings', icon: Settings, label: t('nav.settings') },
   ];
 

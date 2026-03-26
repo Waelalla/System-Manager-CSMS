@@ -6,8 +6,10 @@ import {
   branchesTable, notificationsTable
 } from "@workspace/db";
 import { eq, count, and, sql } from "drizzle-orm";
-import { requireAuth, type AuthRequest } from "../lib/auth.js";
+import { requireAuth, requireRole, type AuthRequest } from "../lib/auth.js";
 import { parsePagination, buildPaginated } from "../lib/pagination.js";
+import { validateBody } from "../lib/validate.js";
+import { CreateComplaintBody, UpdateComplaintStatusBody } from "@workspace/api-zod";
 
 const router = Router();
 
@@ -76,7 +78,7 @@ router.get("/", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/", requireAuth, async (req: AuthRequest, res) => {
+router.post("/", requireAuth, requireRole("Customer Service Agent", "Manager/Voter", "Manager"), validateBody(CreateComplaintBody), async (req: AuthRequest, res) => {
   try {
     const { customer_id, product_id, invoice_id, type_id, fields_values, channel, priority, description, images } = req.body;
     if (!customer_id || !type_id || !channel || !priority || !description) {
@@ -105,7 +107,7 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
 
 router.get("/:id", requireAuth, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     const [complaint] = await db
       .select({
         id: complaintsTable.id,
@@ -165,9 +167,9 @@ router.get("/:id", requireAuth, async (req, res) => {
   }
 });
 
-router.put("/:id/status", requireAuth, async (req: AuthRequest, res) => {
+router.put("/:id/status", requireAuth, requireRole("Customer Service Agent", "Manager/Voter", "Manager"), validateBody(UpdateComplaintStatusBody), async (req: AuthRequest, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     const { status, note } = req.body;
     if (!status) { res.status(400).json({ error: "status is required" }); return; }
 
@@ -185,9 +187,9 @@ router.put("/:id/status", requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
-router.post("/:id/transfer", requireAuth, async (req: AuthRequest, res) => {
+router.post("/:id/transfer", requireAuth, requireRole("Manager/Voter", "Manager"), async (req: AuthRequest, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     const { target_user_id, note } = req.body;
     if (!target_user_id) { res.status(400).json({ error: "target_user_id is required" }); return; }
 
@@ -202,9 +204,9 @@ router.post("/:id/transfer", requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
-router.post("/:id/escalate", requireAuth, async (req: AuthRequest, res) => {
+router.post("/:id/escalate", requireAuth, requireRole("Manager/Voter", "Manager"), async (req: AuthRequest, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     const { note } = req.body;
 
     await db.update(complaintsTable).set({ escalated_to_id: req.user!.userId }).where(eq(complaintsTable.id, id));
@@ -222,7 +224,7 @@ router.post("/:id/escalate", requireAuth, async (req: AuthRequest, res) => {
 
 router.get("/:id/logs", requireAuth, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     const logs = await db
       .select({
         id: complaintLogsTable.id,
@@ -246,7 +248,7 @@ router.get("/:id/logs", requireAuth, async (req, res) => {
 
 router.post("/:id/feedback", requireAuth, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     const { rating, comment } = req.body;
     if (rating === undefined) { res.status(400).json({ error: "rating is required" }); return; }
     const [feedback] = await db.insert(feedbackTable).values({ complaint_id: id, rating, comment }).returning();

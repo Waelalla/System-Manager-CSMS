@@ -18,6 +18,9 @@ import Invoices from "@/pages/invoices";
 import FollowUps from "@/pages/follow-ups";
 import Analytics from "@/pages/analytics";
 import Settings from "@/pages/settings";
+import Profile from "@/pages/profile";
+import BranchChangeLogs from "@/pages/branch-change-logs";
+import ImportLogs from "@/pages/import-logs";
 import Copyright from "@/pages/copyright";
 import NotFound from "@/pages/not-found";
 
@@ -44,6 +47,9 @@ function AuthenticatedRoutes() {
         <Route path="/follow-ups" component={FollowUps} />
         <Route path="/analytics" component={Analytics} />
         <Route path="/settings" component={Settings} />
+        <Route path="/profile" component={Profile} />
+        <Route path="/branch-change-logs" component={BranchChangeLogs} />
+        <Route path="/import-logs" component={ImportLogs} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>

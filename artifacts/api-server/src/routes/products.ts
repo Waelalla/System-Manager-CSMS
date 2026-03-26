@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { productsTable } from "@workspace/db";
 import { eq, count } from "drizzle-orm";
-import { requireAuth } from "../lib/auth.js";
+import { requireAuth, requireRole } from "../lib/auth.js";
 import { parsePagination, buildPaginated } from "../lib/pagination.js";
 
 const router = Router();
@@ -20,7 +20,7 @@ router.get("/", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/", requireAuth, async (req, res) => {
+router.post("/", requireAuth, requireRole("Manager/Voter", "Manager"), async (req, res) => {
   try {
     const { name, category, attributes } = req.body;
     if (!name || !category) { res.status(400).json({ error: "name and category are required" }); return; }
@@ -32,9 +32,9 @@ router.post("/", requireAuth, async (req, res) => {
   }
 });
 
-router.put("/:id", requireAuth, async (req, res) => {
+router.put("/:id", requireAuth, requireRole("Manager/Voter", "Manager"), async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     const { name, category, attributes } = req.body;
     const updates: Record<string, unknown> = {};
     if (name) updates.name = name;
@@ -50,9 +50,9 @@ router.put("/:id", requireAuth, async (req, res) => {
   }
 });
 
-router.delete("/:id", requireAuth, async (req, res) => {
+router.delete("/:id", requireAuth, requireRole("Manager"), async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     await db.delete(productsTable).where(eq(productsTable.id, id));
     res.json({ success: true, message: "Product deleted" });
   } catch (err) {

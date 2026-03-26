@@ -17,6 +17,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const { data: user, isLoading, error } = useGetProfile({
     query: {
+      queryKey: ['getProfile'],
       enabled: !!token,
       retry: false,
     }

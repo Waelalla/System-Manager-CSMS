@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { complaintTypesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { requireAuth } from "../lib/auth.js";
+import { requireAuth, requireRole } from "../lib/auth.js";
 
 const router = Router();
 
@@ -16,7 +16,7 @@ router.get("/", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/", requireAuth, async (req, res) => {
+router.post("/", requireAuth, requireRole("Manager/Voter", "Manager"), async (req, res) => {
   try {
     const { name, fields } = req.body;
     if (!name) { res.status(400).json({ error: "name is required" }); return; }
@@ -28,9 +28,9 @@ router.post("/", requireAuth, async (req, res) => {
   }
 });
 
-router.put("/:id", requireAuth, async (req, res) => {
+router.put("/:id", requireAuth, requireRole("Manager/Voter", "Manager"), async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     const { name, fields } = req.body;
     const updates: Record<string, unknown> = {};
     if (name) updates.name = name;
@@ -45,9 +45,9 @@ router.put("/:id", requireAuth, async (req, res) => {
   }
 });
 
-router.delete("/:id", requireAuth, async (req, res) => {
+router.delete("/:id", requireAuth, requireRole("Manager"), async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     await db.delete(complaintTypesTable).where(eq(complaintTypesTable.id, id));
     res.json({ success: true, message: "Complaint type deleted" });
   } catch (err) {

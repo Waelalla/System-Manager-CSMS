@@ -54,7 +54,7 @@ router.post("/", requireAuth, requireRole("Manager", "Manager/Voter"), async (re
 
 router.get("/:id", requireAuth, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     const [user] = await db
       .select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, role_id: usersTable.role_id, role_name: rolesTable.name, created_at: usersTable.created_at })
       .from(usersTable)
@@ -71,7 +71,7 @@ router.get("/:id", requireAuth, async (req, res) => {
 
 router.put("/:id", requireAuth, requireRole("Manager", "Manager/Voter"), async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     const { name, email, password, role_id } = req.body;
     const updates: Record<string, unknown> = {};
     if (name) updates.name = name;
@@ -91,7 +91,7 @@ router.put("/:id", requireAuth, requireRole("Manager", "Manager/Voter"), async (
 
 router.delete("/:id", requireAuth, requireRole("Manager"), async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     await db.delete(usersTable).where(eq(usersTable.id, id));
     res.json({ success: true, message: "User deleted" });
   } catch (err) {

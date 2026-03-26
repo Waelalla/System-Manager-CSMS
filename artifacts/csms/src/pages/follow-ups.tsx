@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useListInvoices, useCreateFollowUp, useListComplaintTypes } from '@workspace/api-client-react';
+import { useListInvoices, useCreateFollowUp } from '@workspace/api-client-react';
 import { useAuth } from '@/lib/auth';
 import { useTranslation } from '@/lib/i18n';
 import { useQueryClient } from '@tanstack/react-query';
@@ -27,7 +27,7 @@ export default function FollowUps() {
 
   const { data, isLoading, refetch } = useListInvoices({ page, limit: 15, untracked_today: true });
   const { mutateAsync: createFollowUp } = useCreateFollowUp();
-  const { data: complaintTypes } = useListComplaintTypes({ query: { queryKey: ['listComplaintTypes'] } });
+
 
   const untrackedInvoices = data?.data ?? [];
 
@@ -73,22 +73,6 @@ export default function FollowUps() {
           notes: { rating: ratingDialog.rating, comment: ratingDialog.comment },
         }
       });
-      if (ratingDialog.rating <= 2) {
-        const accessToken = localStorage.getItem('access_token');
-        const defaultTypeId = complaintTypes?.data?.[0]?.id ?? 1;
-        await fetch('/api/complaints', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-          body: JSON.stringify({
-            customer_id: ratingDialog.customerId,
-            type_id: defaultTypeId,
-            description: `تقييم منخفض (${ratingDialog.rating}/5) على الفاتورة ${ratingDialog.invoiceNumber}. ملاحظة: ${ratingDialog.comment || 'لا توجد ملاحظات'}`,
-            channel: 'داخلي',
-            priority: 'عالية',
-            invoice_id: ratingDialog.invoiceId,
-          }),
-        });
-      }
       setRatingDialog(null);
       queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
       await refetch();

@@ -111,7 +111,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
 function Sidebar() {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [location] = useLocation();
+
+  const role = user?.role_name ?? '';
+  const isManager = role === 'Manager' || role === 'Manager/Voter';
 
   const links = [
     { href: '/', icon: LayoutDashboard, label: t('nav.dashboard') },
@@ -120,9 +124,11 @@ function Sidebar() {
     { href: '/follow-ups', icon: PhoneCall, label: t('nav.followUps') },
     { href: '/complaints', icon: AlertTriangle, label: t('nav.complaints') },
     { href: '/analytics', icon: BarChart3, label: t('nav.analytics') },
-    { href: '/branch-change-logs', icon: GitBranch, label: 'تغييرات الفروع' },
-    { href: '/import-logs', icon: Upload, label: 'سجلات الاستيراد' },
-    { href: '/settings', icon: Settings, label: t('nav.settings') },
+    ...(isManager ? [
+      { href: '/branch-change-logs', icon: GitBranch, label: 'تغييرات الفروع' },
+      { href: '/import-logs', icon: Upload, label: 'سجلات الاستيراد' },
+      { href: '/settings', icon: Settings, label: t('nav.settings') },
+    ] : []),
   ];
 
   return (
@@ -166,14 +172,26 @@ function Sidebar() {
 
 function NotificationDropdown() {
   const [open, setOpen] = useState(false);
+  const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const { data, refetch } = useListNotifications(undefined, { query: { queryKey: ['/api/notifications'], refetchInterval: 30000 } });
   const { mutateAsync: markRead } = useMarkNotificationsRead();
   const notifications: NotificationItem[] = data?.data ?? [];
   const unread = notifications.filter(n => !n.is_read);
 
-  const handleMarkRead = async (id: number) => {
-    await markRead({ data: { ids: [id] } });
+  const handleNotificationClick = async (n: NotificationItem) => {
+    if (n.id && !n.is_read) {
+      await markRead({ data: { ids: [n.id] } });
+      queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
+    }
+    setOpen(false);
+    if (n.link) {
+      setLocation(n.link);
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    await markRead({ data: { all: true } });
     queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
   };
 
@@ -200,29 +218,42 @@ function NotificationDropdown() {
             >
               <div className="p-4 border-b border-border flex items-center justify-between">
                 <span className="font-semibold text-sm">الإشعارات</span>
-                {unread.length > 0 && (
-                  <span className="text-xs text-primary font-medium">{unread.length} غير مقروءة</span>
-                )}
+                <div className="flex items-center gap-3">
+                  {unread.length > 0 && (
+                    <>
+                      <span className="text-xs text-primary font-medium">{unread.length} غير مقروءة</span>
+                      <button
+                        onClick={handleMarkAllRead}
+                        className="text-xs text-muted-foreground hover:text-foreground underline transition-colors"
+                      >
+                        قراءة الكل
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
-              <div className="max-h-80 overflow-y-auto divide-y divide-border">
+              <div className="max-h-96 overflow-y-auto divide-y divide-border">
                 {notifications.length === 0 ? (
                   <p className="p-6 text-center text-sm text-muted-foreground">لا توجد إشعارات</p>
                 ) : (
-                  notifications.slice(0, 15).map(n => (
+                  notifications.slice(0, 20).map(n => (
                     <div
                       key={n.id}
-                      className={`p-4 flex gap-3 cursor-pointer hover:bg-muted/30 transition-colors ${!n.is_read ? 'bg-primary/5' : ''}`}
-                      onClick={() => { if (!n.is_read && n.id) handleMarkRead(n.id); }}
+                      className={`p-4 flex gap-3 cursor-pointer hover:bg-muted/30 transition-colors ${!n.is_read ? 'bg-primary/5 border-r-2 border-r-primary' : ''}`}
+                      onClick={() => handleNotificationClick(n)}
                     >
-                      <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${!n.is_read ? 'bg-primary' : 'bg-transparent'}`} />
+                      <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${!n.is_read ? 'bg-primary animate-pulse' : 'bg-muted'}`} />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{n.title}</p>
+                        <p className={`text-sm truncate ${!n.is_read ? 'font-bold text-foreground' : 'font-medium text-foreground/80'}`}>{n.title}</p>
                         {n.message && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>}
-                        {n.created_at && (
-                          <p className="text-xs text-muted-foreground/60 mt-1">
-                            {new Date(n.created_at).toLocaleString('ar-EG')}
-                          </p>
-                        )}
+                        <div className="flex items-center gap-2 mt-1">
+                          {n.created_at && (
+                            <p className="text-xs text-muted-foreground/60">
+                              {new Date(n.created_at).toLocaleString('ar-EG')}
+                            </p>
+                          )}
+                          {n.link && <span className="text-xs text-primary/60">← انقر للفتح</span>}
+                        </div>
                       </div>
                     </div>
                   ))

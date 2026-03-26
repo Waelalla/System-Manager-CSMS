@@ -14,6 +14,7 @@ import Dashboard from "@/pages/dashboard";
 import Customers from "@/pages/customers";
 import Complaints from "@/pages/complaints";
 import ComplaintDetail from "@/pages/complaint-detail";
+import ComplaintNew from "@/pages/complaint-new";
 import Invoices from "@/pages/invoices";
 import FollowUps from "@/pages/follow-ups";
 import Analytics from "@/pages/analytics";
@@ -42,6 +43,7 @@ function AuthenticatedRoutes() {
         <Route path="/" component={Dashboard} />
         <Route path="/customers" component={Customers} />
         <Route path="/complaints" component={Complaints} />
+        <Route path="/complaints/new" component={ComplaintNew} />
         <Route path="/complaints/:id" component={ComplaintDetail} />
         <Route path="/invoices" component={Invoices} />
         <Route path="/follow-ups" component={FollowUps} />

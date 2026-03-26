@@ -1,10 +1,11 @@
 import { useParams, Link } from 'wouter';
-import { useGetComplaint, useUpdateComplaintStatus, useListComplaintTypes } from '@workspace/api-client-react';
+import { useGetComplaint, useUpdateComplaintStatus } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ArrowRight, User, Clock, FileText, AlertTriangle, ShieldAlert, CheckCircle, Navigation, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/lib/auth';
 
 const STATUS_COLORS: Record<string, string> = {
   'جديدة': 'bg-blue-500/10 text-blue-500 border-blue-500/20',
@@ -24,7 +25,12 @@ export default function ComplaintDetail() {
   const { mutateAsync: updateStatus, isPending } = useUpdateComplaintStatus();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [noteInput, setNoteInput] = useState('');
+
+  const role = user?.role_name ?? '';
+  const isManager = role === 'Manager' || role === 'Manager/Voter';
+  const canChangeStatus = role === 'Manager' || role === 'Manager/Voter' || role === 'Customer Service Agent';
 
   if (isLoading) return <div className="p-8 text-center animate-pulse">جاري تحميل بيانات الشكوى...</div>;
   if (!complaint) return <div className="p-8 text-center text-destructive">الشكوى غير موجودة</div>;
@@ -145,53 +151,65 @@ export default function ComplaintDetail() {
 
           <div className="bg-card rounded-2xl p-6 shadow-lg shadow-black/5 border border-border/50">
             <h3 className="text-lg font-bold mb-4">إجراءات سريعة</h3>
-            <div className="space-y-3">
-              {complaint.status === 'جديدة' && (
-                <Button onClick={() => handleAction('مستلمة')} disabled={isPending} className="w-full justify-start rounded-xl bg-blue-500 hover:bg-blue-600 text-white">
-                  <Navigation className="w-4 h-4 ml-2" /> استلام الشكوى
-                </Button>
-              )}
-              {complaint.status === 'مستلمة' && (
-                <Button onClick={() => handleAction('جاري المعالجة')} disabled={isPending} className="w-full justify-start rounded-xl bg-purple-500 hover:bg-purple-600 text-white">
-                  <Clock className="w-4 h-4 ml-2" /> بدء المعالجة
-                </Button>
-              )}
-              {(complaint.status === 'جاري المعالجة' || complaint.status === 'تصعيد إداري') && (
-                <Button onClick={() => handleAction('محلول')} disabled={isPending} className="w-full justify-start rounded-xl bg-teal-500 hover:bg-teal-600 text-white">
-                  <CheckCircle className="w-4 h-4 ml-2" /> تحديد كمحلول
-                </Button>
-              )}
-              {complaint.status === 'محلول' && (
-                <Button onClick={() => handleAction('مغلق')} disabled={isPending} className="w-full justify-start rounded-xl bg-green-500 hover:bg-green-600 text-white">
-                  <CheckCircle className="w-4 h-4 ml-2" /> إغلاق الشكوى
-                </Button>
-              )}
-              {complaint.status === 'محلول' && (
-                <Button onClick={() => handleAction('جاري المعالجة')} disabled={isPending} className="w-full justify-start rounded-xl bg-purple-500 hover:bg-purple-600 text-white">
-                  <Clock className="w-4 h-4 ml-2" /> إعادة للمعالجة
-                </Button>
-              )}
-              {(complaint.status === 'جاري المعالجة' || complaint.status === 'مستلمة') && (
-                <Button onClick={() => handleAction('مصعدة')} disabled={isPending} className="w-full justify-start rounded-xl bg-orange-500 hover:bg-orange-600 text-white">
-                  <AlertTriangle className="w-4 h-4 ml-2" /> تصعيد
-                </Button>
-              )}
-              {(complaint.status === 'مصعدة') && (
-                <Button onClick={() => handleAction('تصعيد إداري')} disabled={isPending} className="w-full justify-start rounded-xl bg-red-500 hover:bg-red-600 text-white">
-                  <ShieldAlert className="w-4 h-4 ml-2" /> تصعيد إداري
-                </Button>
-              )}
-              {(complaint.status === 'مصعدة' || complaint.status === 'تصعيد إداري') && (
-                <Button onClick={() => handleAction('جاري المعالجة')} disabled={isPending} className="w-full justify-start rounded-xl bg-purple-500 hover:bg-purple-600 text-white">
-                  <Clock className="w-4 h-4 ml-2" /> إعادة للمعالجة
-                </Button>
-              )}
-              {complaint.status !== 'مغلق' && complaint.status !== 'مرفوض' && complaint.status !== 'محلول' && (
-                <Button onClick={() => handleAction('مرفوض')} variant="outline" disabled={isPending} className="w-full justify-start rounded-xl border-destructive/50 text-destructive hover:bg-destructive/10">
-                  <ShieldAlert className="w-4 h-4 ml-2" /> رفض الشكوى
-                </Button>
-              )}
-            </div>
+            {!canChangeStatus ? (
+              <p className="text-sm text-muted-foreground">ليس لديك صلاحية تعديل الحالة</p>
+            ) : (
+              <div className="space-y-3">
+                {complaint.status === 'جديدة' && (
+                  <Button onClick={() => handleAction('مستلمة')} disabled={isPending} className="w-full justify-start rounded-xl bg-blue-500 hover:bg-blue-600 text-white">
+                    <Navigation className="w-4 h-4 ml-2" /> استلام الشكوى
+                  </Button>
+                )}
+                {complaint.status === 'مستلمة' && (
+                  <Button onClick={() => handleAction('جاري المعالجة')} disabled={isPending} className="w-full justify-start rounded-xl bg-purple-500 hover:bg-purple-600 text-white">
+                    <Clock className="w-4 h-4 ml-2" /> بدء المعالجة
+                  </Button>
+                )}
+                {(complaint.status === 'جاري المعالجة' || complaint.status === 'تصعيد إداري') && (
+                  <Button onClick={() => handleAction('محلول')} disabled={isPending} className="w-full justify-start rounded-xl bg-teal-500 hover:bg-teal-600 text-white">
+                    <CheckCircle className="w-4 h-4 ml-2" /> تحديد كمحلول
+                  </Button>
+                )}
+                {complaint.status === 'محلول' && (
+                  <Button onClick={() => handleAction('مغلق')} disabled={isPending} className="w-full justify-start rounded-xl bg-green-500 hover:bg-green-600 text-white">
+                    <CheckCircle className="w-4 h-4 ml-2" /> إغلاق الشكوى
+                  </Button>
+                )}
+                {complaint.status === 'محلول' && (
+                  <Button onClick={() => handleAction('جاري المعالجة')} disabled={isPending} className="w-full justify-start rounded-xl bg-purple-500 hover:bg-purple-600 text-white">
+                    <Clock className="w-4 h-4 ml-2" /> إعادة للمعالجة
+                  </Button>
+                )}
+                {(complaint.status === 'جاري المعالجة' || complaint.status === 'مستلمة') && (
+                  <Button onClick={() => handleAction('مصعدة')} disabled={isPending} className="w-full justify-start rounded-xl bg-orange-500 hover:bg-orange-600 text-white">
+                    <AlertTriangle className="w-4 h-4 ml-2" /> تصعيد
+                  </Button>
+                )}
+                {isManager && complaint.status === 'مصعدة' && (
+                  <Button onClick={() => handleAction('تصعيد إداري')} disabled={isPending} className="w-full justify-start rounded-xl bg-red-500 hover:bg-red-600 text-white">
+                    <ShieldAlert className="w-4 h-4 ml-2" /> تصعيد إداري
+                  </Button>
+                )}
+                {(complaint.status === 'مصعدة' || complaint.status === 'تصعيد إداري') && (
+                  <Button onClick={() => handleAction('جاري المعالجة')} disabled={isPending} className="w-full justify-start rounded-xl bg-purple-500 hover:bg-purple-600 text-white">
+                    <Clock className="w-4 h-4 ml-2" /> إعادة للمعالجة
+                  </Button>
+                )}
+                {isManager && complaint.status !== 'مغلق' && complaint.status !== 'مرفوض' && (
+                  <Button onClick={() => handleAction('مرفوض')} variant="outline" disabled={isPending} className="w-full justify-start rounded-xl border-destructive/50 text-destructive hover:bg-destructive/10">
+                    <ShieldAlert className="w-4 h-4 ml-2" /> رفض الشكوى
+                  </Button>
+                )}
+                {!isManager && complaint.status !== 'مغلق' && complaint.status !== 'مرفوض' && complaint.status !== 'محلول' && (
+                  <Button onClick={() => handleAction('مرفوض')} variant="outline" disabled={isPending} className="w-full justify-start rounded-xl border-destructive/50 text-destructive hover:bg-destructive/10">
+                    <ShieldAlert className="w-4 h-4 ml-2" /> رفض الشكوى
+                  </Button>
+                )}
+                {complaint.status === 'مغلق' && (
+                  <p className="text-sm text-center text-muted-foreground py-2">الشكوى مغلقة</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

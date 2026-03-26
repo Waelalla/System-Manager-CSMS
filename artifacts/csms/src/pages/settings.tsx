@@ -15,8 +15,8 @@ import {
   useCreateBranch, useDeleteBranch,
   useCreateUser, useUpdateUser, useDeleteUser,
   useListRoles,
+  ComplaintTypeFieldType,
 } from '@workspace/api-client-react';
-import { ComplaintTypeFieldType } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 
@@ -32,6 +32,13 @@ interface ImportResult {
 }
 
 type SettingsRecord = Record<string, string | number | boolean | undefined>;
+
+type TypeFieldDraft = { _id: string; label: string; name: string; type: ComplaintTypeFieldType; required: boolean; options: string };
+type TypeFormData = { name: string; description: string; category: string; is_active: boolean };
+type UserForm = { name: string; email: string; password: string; role_id: string };
+
+const emptyTypeForm: TypeFormData = { name: '', description: '', category: '', is_active: true };
+const emptyUserForm: UserForm = { name: '', email: '', password: '', role_id: '' };
 
 export default function Settings() {
   const { t } = useTranslation();
@@ -59,9 +66,6 @@ export default function Settings() {
   const { mutateAsync: updateUser } = useUpdateUser();
   const { mutateAsync: deleteUser } = useDeleteUser();
 
-  type TypeFieldDraft = { _id: string; label: string; name: string; type: ComplaintTypeFieldType; required: boolean; options: string };
-  type TypeFormData = { name: string; description: string; category: string; is_active: boolean };
-  const emptyTypeForm: TypeFormData = { name: '', description: '', category: '', is_active: true };
   const [showTypeForm, setShowTypeForm] = useState(false);
   const [typeFormMode, setTypeFormMode] = useState<'add' | 'edit'>('add');
   const [editingTypeId, setEditingTypeId] = useState<number | null>(null);
@@ -74,8 +78,6 @@ export default function Settings() {
   const [newBranchGov, setNewBranchGov] = useState('');
   const [newBranchAddress, setNewBranchAddress] = useState('');
 
-  type UserForm = { name: string; email: string; password: string; role_id: string };
-  const emptyUserForm: UserForm = { name: '', email: '', password: '', role_id: '' };
   const [showAddUser, setShowAddUser] = useState(false);
   const [newUserForm, setNewUserForm] = useState<UserForm>(emptyUserForm);
   const [newUserPwdVisible, setNewUserPwdVisible] = useState(false);

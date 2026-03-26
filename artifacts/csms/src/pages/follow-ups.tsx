@@ -1,18 +1,28 @@
 import { useState } from 'react';
 import { useListInvoices, useCreateFollowUp } from '@workspace/api-client-react';
+import { useAuth } from '@/lib/auth';
 import { useTranslation } from '@/lib/i18n';
 import { useQueryClient } from '@tanstack/react-query';
-import { PhoneCall, Search, CheckCircle2, Clock, AlertCircle, RefreshCw } from 'lucide-react';
+import { PhoneCall, CheckCircle2, Clock, RefreshCw, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+
+interface RatingDialogState {
+  invoiceId: number;
+  invoiceNumber: string;
+  rating: number;
+  comment: string;
+}
 
 export default function FollowUps() {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<number[]>([]);
   const [processing, setProcessing] = useState(false);
+  const [ratingDialog, setRatingDialog] = useState<RatingDialogState | null>(null);
+  const [ratingError, setRatingError] = useState('');
 
   const { data, isLoading, refetch } = useListInvoices({ page, limit: 15 });
   const { mutateAsync: createFollowUp } = useCreateFollowUp();
@@ -39,12 +49,50 @@ export default function FollowUps() {
     if (!selected.length) return;
     setProcessing(true);
     try {
-      await createFollowUp({ data: { invoice_ids: selected, assigned_user_id: 1 } });
+      await createFollowUp({ data: { invoice_ids: selected, assigned_user_id: user?.id ?? 1 } });
       setSelected([]);
       queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
       await refetch();
     } catch (err) {
       console.error(err);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleSubmitRating = async () => {
+    if (!ratingDialog) return;
+    if (!ratingDialog.rating) { setRatingError('يرجى اختيار تقييم'); return; }
+    setProcessing(true);
+    setRatingError('');
+    try {
+      await createFollowUp({
+        data: {
+          invoice_ids: [ratingDialog.invoiceId],
+          assigned_user_id: user?.id ?? 1,
+          notes: { rating: ratingDialog.rating, comment: ratingDialog.comment },
+        }
+      });
+      if (ratingDialog.rating <= 2) {
+        const accessToken = localStorage.getItem('access_token');
+        await fetch('/api/complaints', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({
+            description: `تقييم منخفض (${ratingDialog.rating}/5) على الفاتورة ${ratingDialog.invoiceNumber}. ملاحظة: ${ratingDialog.comment || 'لا توجد ملاحظات'}`,
+            channel: 'داخلي',
+            priority: 'عالية',
+            status: 'جديدة',
+            invoice_id: ratingDialog.invoiceId,
+          }),
+        });
+      }
+      setRatingDialog(null);
+      queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
+      await refetch();
+    } catch (err) {
+      console.error(err);
+      setRatingError('حدث خطأ أثناء الحفظ');
     } finally {
       setProcessing(false);
     }
@@ -176,9 +224,17 @@ export default function FollowUps() {
                           <CheckCircle2 className="w-3.5 h-3.5" /> متابع
                         </span>
                       ) : (
-                        <span className="flex items-center gap-1 text-xs text-orange-400 font-medium">
-                          <Clock className="w-3.5 h-3.5" /> لم يُتابع
-                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="rounded-lg border-primary/30 text-primary hover:bg-primary/10 h-7 px-2 text-xs"
+                          onClick={e => {
+                            e.stopPropagation();
+                            setRatingDialog({ invoiceId: invoice.id, invoiceNumber: invoice.invoice_number, rating: 0, comment: '' });
+                          }}
+                        >
+                          <Star className="w-3 h-3 mr-1" /> تقييم
+                        </Button>
                       )}
                     </TableCell>
                   </TableRow>
@@ -195,6 +251,58 @@ export default function FollowUps() {
           </div>
         </div>
       </div>
+
+      {ratingDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-card rounded-2xl shadow-2xl border border-border p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-bold mb-1">تقييم المتابعة</h3>
+            <p className="text-sm text-muted-foreground mb-4">فاتورة: {ratingDialog.invoiceNumber}</p>
+
+            <div className="mb-4">
+              <p className="text-sm font-medium mb-2">التقييم <span className="text-destructive">*</span></p>
+              <div className="flex gap-2 justify-center">
+                {[1, 2, 3, 4, 5].map(star => (
+                  <button
+                    key={star}
+                    onClick={() => setRatingDialog(d => d ? { ...d, rating: star } : d)}
+                    className={`w-10 h-10 rounded-full transition-all ${ratingDialog.rating >= star ? 'text-yellow-400 scale-110' : 'text-muted-foreground/30 hover:text-yellow-300'}`}
+                  >
+                    <Star className={`w-8 h-8 ${ratingDialog.rating >= star ? 'fill-yellow-400' : ''}`} />
+                  </button>
+                ))}
+              </div>
+              {ratingDialog.rating > 0 && (
+                <p className="text-center text-xs text-muted-foreground mt-2">
+                  {ratingDialog.rating <= 2 ? '⚠️ سيتم إنشاء شكوى تلقائياً بسبب التقييم المنخفض' : ''}
+                </p>
+              )}
+            </div>
+
+            <div className="mb-4">
+              <label className="text-sm font-medium block mb-1">ملاحظات اختيارية</label>
+              <textarea
+                className="w-full h-20 rounded-xl bg-background/50 border border-border px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-primary"
+                placeholder="أضف ملاحظاتك هنا..."
+                value={ratingDialog.comment}
+                onChange={e => setRatingDialog(d => d ? { ...d, comment: e.target.value } : d)}
+              />
+            </div>
+
+            {ratingError && <p className="text-sm text-destructive mb-3">{ratingError}</p>}
+
+            <div className="flex gap-3 justify-end">
+              <Button variant="outline" onClick={() => { setRatingDialog(null); setRatingError(''); }} className="rounded-xl">إلغاء</Button>
+              <Button
+                onClick={handleSubmitRating}
+                disabled={processing}
+                className="rounded-xl bg-gradient-to-r from-primary to-accent hover:opacity-90"
+              >
+                {processing ? 'جاري الحفظ...' : 'حفظ التقييم'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

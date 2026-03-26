@@ -100,7 +100,11 @@ artifacts-monorepo/
 - `/complaints` — Complaints list with status badges
 - `/complaints/:id` — Complaint detail with logs and actions
 - `/analytics` — Analytics charts (by status, priority, type, branch, agent)
+- `/follow-ups` — Invoice follow-ups with star rating dialog (auto-complaint on ≤2 stars)
 - `/settings` — System settings
+- `/profile` — User profile
+- `/branch-change-logs` — Branch transfer history
+- `/import-logs` — CSV import history
 - `/copyright` — Copyright standalone page
 
 ## Key Features
@@ -109,8 +113,11 @@ artifacts-monorepo/
 - **Dark mode default** — toggle in header
 - **JWT auth** — stored in localStorage, injected via `setAuthTokenGetter`
 - **Fixed footer** — "© جميع حقوق الطباعة والنشر محفوظة | المطور: Wael Kadous | 01515196224" with Facebook link
-- **CSV import** — two modes: customers_only or customers_and_invoices; deduplication by name+phone
-- **Notifications** — polling-based, unread badge in header bell
+- **CSV import** — JSON rows (`POST /api/import/csv`) or file upload (`POST /api/import/upload`) via multer + csv-parse
+- **Notifications** — polling-based (30s), unread badge in header bell
+- **Follow-up rating dialog** — star rating 1–5 per invoice; ratings ≤2 auto-create a complaint
+- **Complaint lifecycle transitions** — enforced state machine; managers bypass checks; `resolved_at` set on close
+- **RBAC** — `requireRole()` middleware guards routes; DELETE → Manager; domain-specific for POST/PUT
 
 ## TypeScript & Composite Projects
 

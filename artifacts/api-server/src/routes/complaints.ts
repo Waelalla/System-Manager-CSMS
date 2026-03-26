@@ -167,14 +167,48 @@ router.get("/:id", requireAuth, async (req, res) => {
   }
 });
 
+const VALID_STATUSES = ["جديدة", "مستلمة", "جاري المعالجة", "مصعدة", "تصعيد إداري", "مغلق", "مرفوض"] as const;
+type ComplaintStatus = typeof VALID_STATUSES[number];
+
+const LIFECYCLE_TRANSITIONS: Record<ComplaintStatus, ComplaintStatus[]> = {
+  "جديدة":          ["مستلمة", "مرفوض"],
+  "مستلمة":         ["جاري المعالجة", "مصعدة", "مرفوض"],
+  "جاري المعالجة":  ["مصعدة", "تصعيد إداري", "مغلق"],
+  "مصعدة":          ["تصعيد إداري", "مغلق"],
+  "تصعيد إداري":    ["مغلق", "جاري المعالجة"],
+  "مغلق":           [],
+  "مرفوض":          [],
+};
+
 router.put("/:id/status", requireAuth, requireRole("Customer Service Agent", "Manager/Voter", "Manager"), validateBody(UpdateComplaintStatusBody), async (req: AuthRequest, res) => {
   try {
     const id = parseInt(req.params.id as string);
     const { status, note } = req.body;
     if (!status) { res.status(400).json({ error: "status is required" }); return; }
+    if (!VALID_STATUSES.includes(status as ComplaintStatus)) {
+      res.status(400).json({ error: `Invalid status: ${status}`, valid: VALID_STATUSES });
+      return;
+    }
+
+    const [current] = await db.select({ status: complaintsTable.status }).from(complaintsTable).where(eq(complaintsTable.id, id)).limit(1);
+    if (!current) { res.status(404).json({ error: "Complaint not found" }); return; }
+
+    const currentStatus = current.status as ComplaintStatus;
+    const allowed = LIFECYCLE_TRANSITIONS[currentStatus] ?? [];
+    const userRole = req.user!.roleName;
+    const isManager = userRole === "Manager" || userRole === "Manager/Voter";
+
+    if (!isManager && !allowed.includes(status as ComplaintStatus)) {
+      res.status(422).json({
+        error: `Invalid transition from '${currentStatus}' to '${status}'`,
+        allowed_transitions: allowed,
+      });
+      return;
+    }
 
     const updateData: Record<string, unknown> = { status };
     if (status === "مستلمة") updateData.assigned_to_id = req.user!.userId;
+    if (status === "مغلق") updateData.resolved_at = new Date();
 
     await db.update(complaintsTable).set(updateData).where(eq(complaintsTable.id, id));
     await logComplaintAction(id, `تغيير الحالة إلى: ${status}`, req.user!.userId, note);

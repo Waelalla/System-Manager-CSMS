@@ -4,7 +4,7 @@ import { parse } from "csv-parse/sync";
 import { db } from "@workspace/db";
 import { customersTable, invoicesTable, branchesTable, productsTable, importLogsTable, branchChangeLogsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
-import { requireAuth, type AuthRequest } from "../lib/auth.js";
+import { requireAuth, requireRole, type AuthRequest } from "../lib/auth.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -27,7 +27,7 @@ function parseDate(dateStr: string): Date | null {
   return null;
 }
 
-router.post("/csv", requireAuth, async (req: AuthRequest, res) => {
+router.post("/csv", requireAuth, requireRole("Manager", "Manager/Voter"), async (req: AuthRequest, res) => {
   try {
     const { mode, rows, file_name } = req.body;
     if (!mode || !rows || !Array.isArray(rows)) {
@@ -165,7 +165,7 @@ router.post("/csv", requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
-router.post("/upload", requireAuth, upload.single("file"), async (req: AuthRequest, res) => {
+router.post("/upload", requireAuth, requireRole("Manager", "Manager/Voter"), upload.single("file"), async (req: AuthRequest, res) => {
   try {
     if (!req.file) {
       res.status(400).json({ error: "CSV file is required" });

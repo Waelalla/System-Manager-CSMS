@@ -5,7 +5,7 @@ import {
   complaintTypesTable, usersTable, complaintLogsTable, feedbackTable,
   branchesTable, notificationsTable
 } from "@workspace/db";
-import { eq, count, and, sql } from "drizzle-orm";
+import { eq, count, and, sql, gte, lte } from "drizzle-orm";
 import { requireAuth, requireRole, type AuthRequest } from "../lib/auth.js";
 import { parsePagination, buildPaginated } from "../lib/pagination.js";
 import { validateBody } from "../lib/validate.js";
@@ -34,6 +34,8 @@ router.get("/", requireAuth, async (req, res) => {
     if (priority) conditions.push(eq(complaintsTable.priority, priority));
     if (assigned_to_id) conditions.push(eq(complaintsTable.assigned_to_id, parseInt(assigned_to_id)));
     if (customer_id) conditions.push(eq(complaintsTable.customer_id, parseInt(customer_id)));
+    if (date_from) conditions.push(gte(complaintsTable.created_at, new Date(date_from)));
+    if (date_to) conditions.push(lte(complaintsTable.created_at, new Date(date_to)));
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 

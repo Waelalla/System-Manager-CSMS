@@ -2,12 +2,12 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { importLogsTable, usersTable } from "@workspace/db";
 import { eq, count } from "drizzle-orm";
-import { requireAuth } from "../lib/auth.js";
+import { requireAuth, requireRole } from "../lib/auth.js";
 import { parsePagination, buildPaginated } from "../lib/pagination.js";
 
 const router = Router();
 
-router.get("/", requireAuth, async (req, res) => {
+router.get("/", requireAuth, requireRole("Manager", "Manager/Voter"), async (req, res) => {
   try {
     const { page, limit } = parsePagination(req.query as Record<string, unknown>);
     const offset = (page - 1) * limit;
@@ -37,7 +37,7 @@ router.get("/", requireAuth, async (req, res) => {
   }
 });
 
-router.get("/:id", requireAuth, async (req, res) => {
+router.get("/:id", requireAuth, requireRole("Manager", "Manager/Voter"), async (req, res) => {
   try {
     const id = parseInt(req.params.id as string);
     const [log] = await db

@@ -12,7 +12,7 @@ import {
   branchChangeLogsTable,
 } from "@workspace/db";
 import { eq, count, sql, avg, and, gte, lte } from "drizzle-orm";
-import { requireAuth } from "../lib/auth.js";
+import { requireAuth, requireRole } from "../lib/auth.js";
 
 const router = Router();
 
@@ -65,7 +65,7 @@ router.get("/dashboard", requireAuth, async (req, res) => {
   }
 });
 
-router.get("/complaints", requireAuth, async (req, res) => {
+router.get("/complaints", requireAuth, requireRole("Manager", "Manager/Voter"), async (req, res) => {
   try {
     const { date_from, date_to, branch_id } = req.query as Record<string, string>;
     const conditions = [];
@@ -112,7 +112,7 @@ router.get("/complaints", requireAuth, async (req, res) => {
   }
 });
 
-router.get("/customers", requireAuth, async (req, res) => {
+router.get("/customers", requireAuth, requireRole("Manager", "Manager/Voter"), async (req, res) => {
   try {
     const top_by_purchase = await db
       .select({ customer_id: invoicesTable.customer_id, count: count() })
@@ -142,7 +142,7 @@ router.get("/customers", requireAuth, async (req, res) => {
   }
 });
 
-router.get("/invoices", requireAuth, async (req, res) => {
+router.get("/invoices", requireAuth, requireRole("Manager", "Manager/Voter"), async (req, res) => {
   try {
     const [totalResult] = await db.select({ count: count() }).from(invoicesTable);
     const trackedResult = await db
@@ -176,7 +176,7 @@ router.get("/invoices", requireAuth, async (req, res) => {
   }
 });
 
-router.get("/branches", requireAuth, async (req, res) => {
+router.get("/branches", requireAuth, requireRole("Manager", "Manager/Voter"), async (req, res) => {
   try {
     const branches = await db
       .select({

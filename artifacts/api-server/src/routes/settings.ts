@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { settingsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth.js";
 
 const router = Router();
@@ -24,8 +23,8 @@ router.put("/", requireAuth, requireRole("Manager", "Manager/Voter"), async (req
     for (const [key, value] of Object.entries(updates)) {
       await db
         .insert(settingsTable)
-        .values({ key, value: String(value) })
-        .onConflictDoUpdate({ target: settingsTable.key, set: { value: String(value) } });
+        .values({ key, value })
+        .onConflictDoUpdate({ target: settingsTable.key, set: { value } });
     }
     res.json({ success: true });
   } catch (err) {

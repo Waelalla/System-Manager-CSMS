@@ -123,6 +123,7 @@ router.get("/:id", requireAuth, async (req, res) => {
         invoice_number: invoicesTable.invoice_number,
         type_id: complaintsTable.type_id,
         type_name: complaintTypesTable.name,
+        type_fields: complaintTypesTable.fields,
         channel: complaintsTable.channel,
         priority: complaintsTable.priority,
         description: complaintsTable.description,

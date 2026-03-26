@@ -2,7 +2,7 @@ import { useParams, Link } from 'wouter';
 import { useGetComplaint, useUpdateComplaintStatus } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { ArrowRight, User, Clock, FileText, AlertTriangle, ShieldAlert, CheckCircle, Navigation, MessageSquare } from 'lucide-react';
+import { ArrowRight, User, Clock, FileText, AlertTriangle, ShieldAlert, CheckCircle, Navigation, MessageSquare, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth';
@@ -72,6 +72,47 @@ export default function ComplaintDetail() {
               <p className="mt-3 text-sm text-muted-foreground">رقم الفاتورة: <span className="text-primary font-medium">#{complaint.invoice_id}</span></p>
             )}
           </div>
+
+          {/* Dynamic type fields */}
+          {(() => {
+            const fv = (complaint as typeof complaint & { fields_values?: Record<string, unknown>; type_fields?: { name: string; label: string; type: string }[] }).fields_values;
+            const tf = (complaint as typeof complaint & { type_fields?: { name: string; label: string; type: string }[] }).type_fields;
+            if (!fv || !tf || Object.keys(fv).length === 0) return null;
+            return (
+              <div className="bg-card rounded-2xl p-6 shadow-lg shadow-black/5 border border-primary/20 ring-1 ring-primary/10">
+                <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-primary" />
+                  بيانات {complaint.type_name}
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {tf.map(field => {
+                    const value = fv[field.name];
+                    if (value === undefined || value === null || value === '') return null;
+                    return (
+                      <div key={field.name} className="space-y-1">
+                        <p className="text-xs text-muted-foreground font-medium">{field.label}</p>
+                        {field.type === 'stars' ? (
+                          <div className="flex gap-1">
+                            {[1, 2, 3, 4, 5].map(n => (
+                              <Star
+                                key={n}
+                                className={`w-5 h-5 ${Number(value as string | number) >= n ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground/30'}`}
+                              />
+                            ))}
+                            <span className="text-sm text-muted-foreground mr-1">({value as string | number}/5)</span>
+                          </div>
+                        ) : field.type === 'file' ? (
+                          <p className="text-sm text-primary">📎 {String(value)}</p>
+                        ) : (
+                          <p className="text-sm font-medium text-foreground">{String(value)}</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
 
           <div className="bg-card rounded-2xl p-6 shadow-lg shadow-black/5 border border-border/50">
             <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><Clock className="w-5 h-5 text-primary"/> سجل النشاطات</h2>

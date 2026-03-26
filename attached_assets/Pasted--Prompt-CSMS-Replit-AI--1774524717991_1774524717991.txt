@@ -1,0 +1,187 @@
+# 🚀 Prompt: نظام إدارة خدمة العملاء (CSMS) — مناسب لـ Replit AI
+---
+## 🎯 نظرة عامة على المشروع
+ابنِ نظامًا إلكترونيًا متكاملًا لإدارة خدمة العملاء (Customer Service Management System - CSMS) باستخدام:
+- **Frontend:** React + Next.js + Ant Design (دعم RTL للعربية)
+- **Backend:** Node.js + Express (أو NestJS) + Prisma ORM
+- **Database:** PostgreSQL
+- **Auth:** NextAuth.js (Email/Password + Google OAuth 2.0)
+- **Real-time:** Socket.io للإشعارات الفورية
+- **Storage:** Cloudinary أو Local Storage للصور
+- **Charts:** Recharts أو Chart.js
+- **Deploy:** Docker + Docker Compose
+- **Theme:** Dark Mode افتراضي بالكامل لجميع الصفحات والمكونات
+---
+## 🔐 المصادقة والأمان (Authentication & Security)
+### تسجيل الدخول
+- بريد إلكتروني + كلمة مرور (JWT Access Token + Refresh Token)
+- تسجيل الدخول عبر Google (OAuth 2.0) — يُفعَّل من إعدادات النظام
+- Rate Limiting على محاولات الدخول الفاشلة
+- تشفير كلمات المرور بـ Bcrypt
+### المستخدم الافتراضي (يُنشأ تلقائيًا عند أول تشغيل)
+```
+username: wael
+password: 123
+role: مدير (Manager)
+```
+### بنية User Entity
+```
+id, name, email, password_hash, google_id, role_id, created_at
+```
+---
+## 👥 الأدوار والصلاحيات (Roles & Permissions)
+| الدور | الصلاحيات |
+|-------|-----------|
+| **موظف خدمة عملاء** | إضافة/تعديل/متابعة عملاء، إنشاء شكاوى، استلام شكاوى، تحديث حالة، تسجيل حلول |
+| **محاسب** | استيراد بيانات العملاء والفواتير، مشاهدة تقارير مالية، استلام شكاوى إدارية |
+| **مدير** | كل الصلاحيات: إعدادات النظام، التحكم في الصلاحيات، الموافقة على التصعيد |
+| **مدير/وتر** | نفس المدير + إلغاء/تعديل أي سجل، مشاهدة جميع السجلات |
+| **مهندس صيانة** | صلاحية شاملة: إدارة الفروع، المنتجات، الموظفين، النظام كله |
+---
+## 🗄️ قاعدة البيانات — الكيانات (Entities)
+```prisma
+model User {
+id Int @id @default(autoincrement())
+name String
+email String @unique
+password_hash String?
+google_id String?
+role_id Int
+created_at DateTime @default(now())
+}
+model Role {
+id Int @id @default(autoincrement())
+name String
+permissions Json
+}
+model Branch {
+id Int @id @default(autoincrement())
+name String
+address String?
+governorate String
+created_at DateTime @default(now())
+}
+model Customer {
+id Int @id @default(autoincrement())
+code String @unique
+name String
+phone String
+type String
+governorate String
+branch_id Int
+address String?
+extra Json?
+}
+model Invoice {
+id Int @id @default(autoincrement())
+invoice_number String
+invoice_date DateTime
+amount Decimal
+status String
+product_id Int?
+customer_id Int
+created_at DateTime @default(now())
+}
+model Product {
+id Int @id @default(autoincrement())
+name String
+category String
+attributes Json?
+}
+model ComplaintType {
+id Int @id @default(autoincrement())
+name String
+fields Json
+}
+model Complaint {
+id Int @id @default(autoincrement())
+customer_id Int
+product_id Int?
+invoice_id Int?
+type_id Int
+fields_values Json?
+channel String
+priority String
+description String
+images Json?
+status String @default("جديدة")
+assigned_to_id Int?
+escalated_to_id Int?
+created_at DateTime @default(now())
+}
+model ComplaintLog {
+id Int @id @default(autoincrement())
+complaint_id Int
+action String
+user_id Int
+note String?
+timestamp DateTime @default(now())
+}
+model Feedback {
+id Int @id @default(autoincrement())
+complaint_id Int
+rating Int
+comment String?
+created_at DateTime @default(now())
+}
+model FollowUp {
+id Int @id @default(autoincrement())
+invoice_id Int
+assigned_user_id Int
+notes Json?
+status String @default("pending")
+created_at DateTime @default(now())
+}
+model BranchChangeLog {
+id Int @id @default(autoincrement())
+customer_id Int
+old_branch_id Int
+new_branch_id Int
+changed_at DateTime @default(now())
+notes String?
+}
+model ImportLog {
+id Int @id @default(autoincrement())
+user_id Int
+file_name String
+total_rows Int
+added_customers Int
+updated_customers Int
+added_invoices Int
+duplicate_invoices Int
+errors Json?
+warnings Json?
+imported_at DateTime @default(now())
+}
+model Settings {
+key String @id
+value Json
+}
+```
+---
+## 📋 وظائف النظام التفصيلية (Functional Requirements)
+### 1️⃣ تسجيل العملاء
+#### يدويًا — نموذج "إضافة عميل جديد":
+- كود العميل (اختياري — يُولَّد تلقائيًا بصيغة `CUST-YYYYMMDD-####`)
+- اسم العميل* (نص، أقصى 150 حرف)
+- رقم الهاتف* (7–15 رقمًا)
+- نوع العميل* (قائمة منسدلة من الإعدادات)
+- المحافظة* (قائمة منسدلة)
+- عنوان الشارع (اختياري)
+- الفرع* (من الفروع المعرفة)
+#### استيراد CSV:
+- المسار: `الإعدادات → إدارة البيانات → استيراد بيانات العملاء`
+- خياران للاستيراد:
+- استيراد عملاء فقط
+- استيراد عملاء + فواتير
+- دعم ملفات UTF-8، بحد أقصى 50,000 صف في الدفعة
+- أعمدة العميل: `code, name, phone, type, governorate, branch, address`
+- أعمدة الفاتورة: `invoice_number, invoice_date, invoice_amount, invoice_status, invoice_product`
+#### قواعد الاستيراد:
+- التكرار يُحدَّد بـ `name + phone`؛ إذا وُجد يُحدَّث السجل
+- تغيير الفرع يُسجَّل في `BranchChangeLog`
+- توليد `code` تلقائيًا إذا كان فارغًا
+- التحقق من وجود الفرع والمنتج؛ إذا لم يُوجَد تُسجَّل تحذيرات وتستمر العملية
+- فحص تنسيق التاريخ (`YYYY-MM-DD` أو `DD/MM/YYYY`)
+- التحقق من أن المبلغ رقم عشري مقرَّب لمنزلتين
+- جمع الأخطاء والتحذيرات في `ImportLog`

@@ -60,27 +60,60 @@ function StarRatingInput({ value, onChange }: { value: number; onChange: (v: num
   );
 }
 
-function FileFieldInput({ value, onChange }: { value: File | null; onChange: (f: File | null) => void }) {
+function FileFieldInput({ value, onChange }: { value: string | null; onChange: (url: string | null, name?: string) => void }) {
   const ref = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [localName, setLocalName] = useState<string | null>(null);
+
+  const handleFile = async (file: File) => {
+    setLocalName(file.name);
+    setUploading(true);
+    try {
+      const token = localStorage.getItem('access_token');
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/upload', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd });
+      if (!res.ok) throw new Error('Upload failed');
+      const data: { url: string; originalname: string } = await res.json();
+      onChange(data.url, data.originalname);
+    } catch {
+      setLocalName(null);
+      onChange(null);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const isImage = value && /\.(jpg|jpeg|png|gif|webp)$/i.test(value);
+
   return (
     <div>
-      <input type="file" ref={ref} className="hidden" accept="image/*,application/pdf" onChange={e => onChange(e.target.files?.[0] ?? null)} />
+      <input type="file" ref={ref} className="hidden" accept="image/*,application/pdf,application/msword,.docx,.xlsx" onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
       {value ? (
-        <div className="flex items-center gap-3 p-3 rounded-xl bg-primary/5 border border-primary/20">
-          <Upload className="w-4 h-4 text-primary" />
-          <span className="text-sm text-foreground flex-1 truncate">{value.name}</span>
-          <button type="button" onClick={() => onChange(null)} className="text-muted-foreground hover:text-destructive">
-            <X className="w-4 h-4" />
-          </button>
+        <div className="space-y-2">
+          {isImage && (
+            <img src={value} alt="معاينة" className="max-h-40 rounded-xl border border-border/50 object-contain bg-muted/30" />
+          )}
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-primary/5 border border-primary/20">
+            <Upload className="w-4 h-4 text-primary shrink-0" />
+            <span className="text-sm text-foreground flex-1 truncate">{localName ?? value.split('/').pop()}</span>
+            <button type="button" onClick={() => { onChange(null); setLocalName(null); }} className="text-muted-foreground hover:text-destructive shrink-0">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       ) : (
         <button
           type="button"
           onClick={() => ref.current?.click()}
-          className="w-full h-10 flex items-center gap-2 px-3 rounded-xl bg-background/50 border border-border/50 border-dashed text-muted-foreground hover:text-foreground hover:border-border transition-colors text-sm"
+          disabled={uploading}
+          className="w-full h-12 flex items-center gap-2 px-3 rounded-xl bg-background/50 border border-border/50 border-dashed text-muted-foreground hover:text-foreground hover:border-border transition-colors text-sm disabled:opacity-60"
         >
-          <Upload className="w-4 h-4" />
-          اضغط لرفع ملف أو صورة
+          {uploading ? (
+            <><div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" /> جاري الرفع...</>
+          ) : (
+            <><Upload className="w-4 h-4" /> اضغط لرفع ملف أو صورة</>
+          )}
         </button>
       )}
     </div>
@@ -137,15 +170,6 @@ export default function ComplaintNew() {
     }
 
     try {
-      const serializedFieldValues: Record<string, string | number | null> = {};
-      for (const [key, val] of Object.entries(fieldValues)) {
-        if (val instanceof File) {
-          serializedFieldValues[key] = val.name;
-        } else {
-          serializedFieldValues[key] = val as string | number | null;
-        }
-      }
-
       const payload: CreateComplaintRequest = {
         customer_id: parseInt(form.customer_id),
         type_id: parseInt(form.type_id),
@@ -154,7 +178,7 @@ export default function ComplaintNew() {
         description: form.description.trim(),
         ...(form.product_id ? { product_id: parseInt(form.product_id) } : {}),
         ...(form.invoice_id ? { invoice_id: parseInt(form.invoice_id) } : {}),
-        ...(Object.keys(serializedFieldValues).length > 0 ? { fields_values: serializedFieldValues } : {}),
+        ...(Object.keys(fieldValues).length > 0 ? { fields_values: fieldValues as Record<string, string | number | null> } : {}),
       };
 
       const result = await createComplaint({ data: payload });
@@ -357,8 +381,8 @@ export default function ComplaintNew() {
 
                   {field.type === 'file' && (
                     <FileFieldInput
-                      value={(fieldValues[field.name] as File | null) ?? null}
-                      onChange={f => setFieldValue(field.name, f)}
+                      value={(fieldValues[field.name] as string | null) ?? null}
+                      onChange={(url) => setFieldValue(field.name, url ?? '')}
                     />
                   )}
 

@@ -17,6 +17,7 @@ import notificationsRouter from "./notifications.js";
 import analyticsRouter from "./analytics.js";
 import settingsRouter from "./settings.js";
 import branchChangeLogsRouter from "./branch_change_logs.js";
+import uploadRouter from "./upload.js";
 
 const router: IRouter = Router();
 
@@ -38,5 +39,6 @@ router.use("/analytics", analyticsRouter);
 router.use("/settings", settingsRouter);
 router.use("/rating-questions", ratingQuestionsRouter);
 router.use("/branch-change-logs", branchChangeLogsRouter);
+router.use("/upload", uploadRouter);
 
 export default router;

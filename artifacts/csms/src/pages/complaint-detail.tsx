@@ -2,7 +2,7 @@ import { useParams, Link } from 'wouter';
 import { useGetComplaint, useUpdateComplaintStatus } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { ArrowRight, User, Clock, FileText, AlertTriangle, ShieldAlert, CheckCircle, Navigation, MessageSquare, Star } from 'lucide-react';
+import { ArrowRight, User, Clock, FileText, AlertTriangle, ShieldAlert, CheckCircle, Navigation, MessageSquare, Star, X, ZoomIn, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth';
@@ -18,6 +18,28 @@ const STATUS_COLORS: Record<string, string> = {
   'مرفوض': 'bg-muted/50 text-muted-foreground border-muted',
 };
 
+function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <button onClick={onClose} className="absolute top-4 left-4 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors text-white">
+        <X className="w-6 h-6" />
+      </button>
+      <a href={src} target="_blank" rel="noopener noreferrer" className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors text-white" onClick={e => e.stopPropagation()}>
+        <ExternalLink className="w-5 h-5" />
+      </a>
+      <img
+        src={src}
+        alt="عرض الصورة"
+        className="max-w-full max-h-[90vh] rounded-xl object-contain shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      />
+    </div>
+  );
+}
+
 export default function ComplaintDetail() {
   const params = useParams();
   const id = parseInt(params.id || '0');
@@ -27,6 +49,7 @@ export default function ComplaintDetail() {
   const { toast } = useToast();
   const { user } = useAuth();
   const [noteInput, setNoteInput] = useState('');
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   const role = user?.role_name ?? '';
   const isManager = role === 'Manager' || role === 'Manager/Voter';
@@ -50,6 +73,7 @@ export default function ComplaintDetail() {
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
+      {lightboxSrc && <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
       <div className="flex items-center gap-4">
         <Link href="/complaints" className="p-2 rounded-xl bg-card border border-border/50 hover:bg-muted transition-colors">
           <ArrowRight className="w-5 h-5 text-muted-foreground" />
@@ -101,9 +125,27 @@ export default function ComplaintDetail() {
                             ))}
                             <span className="text-sm text-muted-foreground mr-1">({value as string | number}/5)</span>
                           </div>
-                        ) : field.type === 'file' ? (
-                          <p className="text-sm text-primary">📎 {String(value)}</p>
-                        ) : (
+                        ) : field.type === 'file' ? (() => {
+                          const url = String(value);
+                          const isImg = /\.(jpg|jpeg|png|gif|webp)$/i.test(url);
+                          return isImg ? (
+                            <button
+                              type="button"
+                              onClick={() => setLightboxSrc(url)}
+                              className="relative group block rounded-xl overflow-hidden border border-border/50 bg-muted/20 hover:border-primary/50 transition-colors"
+                            >
+                              <img src={url} alt={field.label} className="max-h-48 w-auto object-contain mx-auto p-1" />
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                                <ZoomIn className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+                              </div>
+                            </button>
+                          ) : (
+                            <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline">
+                              <ExternalLink className="w-4 h-4 shrink-0" />
+                              {url.split('/').pop()}
+                            </a>
+                          );
+                        })() : (
                           <p className="text-sm font-medium text-foreground">{String(value)}</p>
                         )}
                       </div>

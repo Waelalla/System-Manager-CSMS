@@ -425,7 +425,7 @@ export const CreateCustomerBody = zod.object({
   phone: zod.string(),
   type: zod.string(),
   governorate: zod.string(),
-  branch_id: zod.number(),
+  branch_id: zod.number().optional(),
   address: zod.string().optional(),
 });
 

@@ -169,7 +169,7 @@ export interface CreateCustomerRequest {
   phone: string;
   type: string;
   governorate: string;
-  branch_id: number;
+  branch_id?: number;
   address?: string;
 }
 

@@ -93,14 +93,14 @@ router.get("/", requireAuth, async (req, res) => {
 router.post("/", requireAuth, requireRole("Customer Service Agent", "Manager/Voter", "Manager"), validateBody(CreateCustomerBody), async (req, res) => {
   try {
     const { code, name, phone, type, governorate, branch_id, address } = req.body;
-    if (!name || !phone || !type || !governorate || !branch_id) {
-      res.status(400).json({ error: "name, phone, type, governorate, branch_id are required" });
+    if (!name || !phone || !type || !governorate) {
+      res.status(400).json({ error: "name, phone, type, governorate are required" });
       return;
     }
     const customerCode = code || generateCustomerCode();
-    const [customer] = await db.insert(customersTable).values({ code: customerCode, name, phone, type, governorate, branch_id, address }).returning();
-    const [branch] = await db.select().from(branchesTable).where(eq(branchesTable.id, branch_id)).limit(1);
-    res.status(201).json({ ...customer, branch_name: branch?.name ?? "" });
+    const [customer] = await db.insert(customersTable).values({ code: customerCode, name, phone, type, governorate, branch_id: branch_id ?? null, address }).returning();
+    const branch = branch_id ? (await db.select().from(branchesTable).where(eq(branchesTable.id, branch_id)).limit(1))[0] : null;
+    res.status(201).json({ ...customer, branch_name: branch?.name ?? null });
   } catch (err) {
     req.log.error({ err }, "Create customer error");
     res.status(500).json({ error: "Internal Server Error" });

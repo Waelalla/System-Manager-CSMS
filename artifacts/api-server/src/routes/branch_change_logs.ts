@@ -57,4 +57,25 @@ router.get("/", requireAuth, requireRole("Manager", "Manager/Voter"), async (req
   }
 });
 
+router.patch("/:id/notes", requireAuth, requireRole("Manager", "Manager/Voter"), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id as string);
+    const { notes } = req.body as { notes?: string };
+    if (typeof notes !== "string") {
+      res.status(400).json({ error: "notes field is required" });
+      return;
+    }
+    const [updated] = await db
+      .update(branchChangeLogsTable)
+      .set({ notes })
+      .where(eq(branchChangeLogsTable.id, id))
+      .returning({ id: branchChangeLogsTable.id });
+    if (!updated) { res.status(404).json({ error: "Not Found" }); return; }
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Update branch change log notes error");
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
 export default router;

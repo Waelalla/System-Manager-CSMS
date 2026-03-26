@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useListBranchChangeLogs, type BranchChangeLogItem } from '@workspace/api-client-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
 import { GitBranch, ChevronLeft, ChevronRight, Phone, FileText } from 'lucide-react';
 
 type CallNote = {
@@ -16,6 +18,9 @@ export default function BranchChangeLogs() {
   const [page, setPage] = useState(1);
   const [selectedLog, setSelectedLog] = useState<CallNote | null>(null);
   const [callNote, setCallNote] = useState('');
+  const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data, isLoading } = useListBranchChangeLogs({ page, limit: 20 });
   const logs: BranchChangeLogItem[] = data?.data ?? [];
@@ -30,7 +35,29 @@ export default function BranchChangeLogs() {
       old_branch_name: log.old_branch_name,
       new_branch_name: log.new_branch_name,
     });
-    setCallNote('');
+    setCallNote((log as { notes?: string }).notes ?? '');
+  };
+
+  const saveCallNote = async () => {
+    if (!selectedLog) return;
+    setSaving(true);
+    try {
+      const accessToken = localStorage.getItem('access_token');
+      const res = await fetch(`/api/branch-change-logs/${selectedLog.id}/notes`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ notes: callNote }),
+      });
+      if (!res.ok) throw new Error('فشل الحفظ');
+      toast({ title: 'تم الحفظ', description: 'تم حفظ ملاحظة المكالمة بنجاح' });
+      void queryClient.invalidateQueries({ queryKey: ['/api/branch-change-logs'] });
+      setSelectedLog(null);
+      setCallNote('');
+    } catch {
+      toast({ title: 'خطأ', description: 'فشل حفظ الملاحظة', variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -137,15 +164,13 @@ export default function BranchChangeLogs() {
                 />
               </div>
               <div className="flex gap-2 justify-end">
-                <Button variant="outline" onClick={() => setSelectedLog(null)} className="rounded-xl">إلغاء</Button>
+                <Button variant="outline" onClick={() => setSelectedLog(null)} className="rounded-xl" disabled={saving}>إلغاء</Button>
                 <Button
-                  onClick={() => {
-                    setSelectedLog(null);
-                    setCallNote('');
-                  }}
+                  onClick={saveCallNote}
+                  disabled={saving || !callNote.trim()}
                   className="rounded-xl bg-primary hover:bg-primary/90 text-white"
                 >
-                  حفظ الملاحظة
+                  {saving ? 'جاري الحفظ...' : 'حفظ الملاحظة'}
                 </Button>
               </div>
             </CardContent>

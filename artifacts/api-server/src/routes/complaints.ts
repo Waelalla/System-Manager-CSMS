@@ -245,7 +245,7 @@ router.post("/:id/escalate", requireAuth, requireRole("Manager/Voter", "Manager"
     const id = parseInt(req.params.id as string);
     const { note } = req.body;
 
-    await db.update(complaintsTable).set({ escalated_to_id: req.user!.userId }).where(eq(complaintsTable.id, id));
+    await db.update(complaintsTable).set({ escalated_to_id: req.user!.userId, status: "تصعيد إداري" }).where(eq(complaintsTable.id, id));
     await logComplaintAction(id, "تصعيد إداري", req.user!.userId, note ?? "تم التصعيد للإدارة");
 
     const managers = await db.select({ id: usersTable.id }).from(usersTable);

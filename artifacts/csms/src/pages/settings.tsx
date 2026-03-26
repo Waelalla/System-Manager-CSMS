@@ -11,11 +11,12 @@ import {
 import {
   useGetSettings, useUpsertSettings,
   useListUsers, useListComplaintTypes, useListBranches,
-  useCreateComplaintType, useDeleteComplaintType,
+  useCreateComplaintType, useUpdateComplaintType, useDeleteComplaintType,
   useCreateBranch, useDeleteBranch,
   useCreateUser, useUpdateUser, useDeleteUser,
   useListRoles,
 } from '@workspace/api-client-react';
+import { ComplaintTypeFieldType } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 
@@ -50,6 +51,7 @@ export default function Settings() {
   const { data: typesData } = useListComplaintTypes({ query: { queryKey: ['listComplaintTypes'] } });
   const { data: branchesData } = useListBranches({ query: { queryKey: ['listBranches'] } });
   const { mutateAsync: createType } = useCreateComplaintType();
+  const { mutateAsync: updateType } = useUpdateComplaintType();
   const { mutateAsync: deleteType } = useDeleteComplaintType();
   const { mutateAsync: createBranch } = useCreateBranch();
   const { mutateAsync: deleteBranch } = useDeleteBranch();
@@ -57,9 +59,16 @@ export default function Settings() {
   const { mutateAsync: updateUser } = useUpdateUser();
   const { mutateAsync: deleteUser } = useDeleteUser();
 
-  const [newTypeName, setNewTypeName] = useState('');
-  const [newTypeDesc, setNewTypeDesc] = useState('');
-  const [addingType, setAddingType] = useState(false);
+  type TypeFieldDraft = { _id: string; label: string; name: string; type: ComplaintTypeFieldType; required: boolean; options: string };
+  type TypeFormData = { name: string; description: string; category: string; is_active: boolean };
+  const emptyTypeForm: TypeFormData = { name: '', description: '', category: '', is_active: true };
+  const [showTypeForm, setShowTypeForm] = useState(false);
+  const [typeFormMode, setTypeFormMode] = useState<'add' | 'edit'>('add');
+  const [editingTypeId, setEditingTypeId] = useState<number | null>(null);
+  const [typeFormData, setTypeFormData] = useState<TypeFormData>(emptyTypeForm);
+  const [typeFormFields, setTypeFormFields] = useState<TypeFieldDraft[]>([]);
+  const [showTypePreview, setShowTypePreview] = useState(false);
+  const [savingType, setSavingType] = useState(false);
 
   const [newBranchName, setNewBranchName] = useState('');
   const [newBranchGov, setNewBranchGov] = useState('');
@@ -77,16 +86,71 @@ export default function Settings() {
   const [savingUser, setSavingUser] = useState(false);
   const [addingBranch, setAddingBranch] = useState(false);
 
-  const handleAddType = async () => {
-    if (!newTypeName.trim()) return;
-    setAddingType(true);
+  const openAddTypeForm = () => {
+    setTypeFormMode('add');
+    setEditingTypeId(null);
+    setTypeFormData(emptyTypeForm);
+    setTypeFormFields([]);
+    setShowTypePreview(false);
+    setShowTypeForm(true);
+  };
+
+  const openEditTypeForm = (tp: { id: number; name: string; description?: string; category?: string; is_active?: boolean; fields: { name: string; label: string; type: string; required: boolean; options?: string[] }[] }) => {
+    setTypeFormMode('edit');
+    setEditingTypeId(tp.id);
+    setTypeFormData({ name: tp.name, description: tp.description ?? '', category: tp.category ?? '', is_active: tp.is_active !== false });
+    setTypeFormFields(tp.fields.map(f => ({
+      _id: Math.random().toString(36).slice(2),
+      label: f.label,
+      name: f.name,
+      type: f.type as ComplaintTypeFieldType,
+      required: f.required,
+      options: (f.options ?? []).join(', '),
+    })));
+    setShowTypePreview(false);
+    setShowTypeForm(true);
+  };
+
+  const addTypeField = () => {
+    setTypeFormFields(prev => [...prev, { _id: Math.random().toString(36).slice(2), label: '', name: '', type: ComplaintTypeFieldType.text, required: false, options: '' }]);
+  };
+
+  const removeTypeField = (_id: string) => setTypeFormFields(prev => prev.filter(f => f._id !== _id));
+
+  const updateTypeField = (_id: string, patch: Partial<TypeFieldDraft>) => {
+    setTypeFormFields(prev => prev.map(f => {
+      if (f._id !== _id) return f;
+      const updated = { ...f, ...patch };
+      if (patch.label !== undefined && !updated.name) updated.name = patch.label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+      return updated;
+    }));
+  };
+
+  const handleSaveType = async () => {
+    if (!typeFormData.name.trim()) return;
+    setSavingType(true);
     try {
-      await createType({ data: { name: newTypeName.trim(), fields: [] } });
+      const fields = typeFormFields.filter(f => f.label.trim()).map(f => ({
+        name: f.name || f.label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || `field_${f._id}`,
+        label: f.label.trim(),
+        type: f.type,
+        required: f.required,
+        options: f.type === ComplaintTypeFieldType.select ? f.options.split(',').map(o => o.trim()).filter(Boolean) : undefined,
+      }));
+      const payload = { name: typeFormData.name.trim(), description: typeFormData.description || undefined, category: typeFormData.category || undefined, is_active: typeFormData.is_active, fields };
+      if (typeFormMode === 'add') {
+        await createType({ data: payload });
+        toast({ title: 'تم الإضافة', description: `تم إضافة النوع "${typeFormData.name}"` });
+      } else if (editingTypeId) {
+        await updateType({ id: editingTypeId, data: payload });
+        toast({ title: 'تم التعديل', description: `تم تحديث النوع "${typeFormData.name}"` });
+      }
       queryClient.invalidateQueries({ queryKey: ['listComplaintTypes'] });
-      setNewTypeName(''); setNewTypeDesc('');
-      toast({ title: 'تم الإضافة', description: `تم إضافة النوع "${newTypeName}"` });
-    } catch { toast({ title: 'خطأ', description: 'فشل في إضافة النوع', variant: 'destructive' }); }
-    finally { setAddingType(false); }
+      setShowTypeForm(false);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'فشل في الحفظ';
+      toast({ title: 'خطأ', description: msg, variant: 'destructive' });
+    } finally { setSavingType(false); }
   };
 
   const handleDeleteType = async (id: number, name: string) => {
@@ -97,6 +161,8 @@ export default function Settings() {
       toast({ title: 'تم الحذف' });
     } catch { toast({ title: 'خطأ', description: 'فشل في الحذف', variant: 'destructive' }); }
   };
+
+  const fieldTypeLabels: Record<string, string> = { text: 'نص قصير', textarea: 'نص طويل', number: 'رقم', date: 'تاريخ', select: 'قائمة منسدلة', file: 'ملف/صورة', stars: 'تقييم نجوم' };
 
   const handleAddBranch = async () => {
     if (!newBranchName.trim() || !newBranchGov.trim()) return;
@@ -511,64 +577,166 @@ export default function Settings() {
             {section === 'types' && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-bold">أنواع الشكاوى</h2>
-                  <span className="text-sm text-muted-foreground">{types.length} نوع</span>
+                  <div>
+                    <h2 className="text-xl font-bold">أنواع الشكاوى</h2>
+                    <p className="text-sm text-muted-foreground mt-0.5">{types.length} نوع مُعرَّف</p>
+                  </div>
+                  <Button onClick={showTypeForm ? () => setShowTypeForm(false) : openAddTypeForm} className="rounded-xl h-10 bg-primary hover:bg-primary/90 text-white gap-2">
+                    {showTypeForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                    {showTypeForm ? 'إلغاء' : 'إضافة نوع جديد'}
+                  </Button>
                 </div>
 
-                <div className="bg-muted/20 rounded-xl p-4 border border-border/40">
-                  <p className="text-sm font-medium mb-3 flex items-center gap-2"><Plus className="w-4 h-4 text-primary" /> إضافة نوع جديد</p>
-                  <div className="grid grid-cols-1 gap-3">
-                    <div className="flex gap-3">
-                      <Input
-                        value={newTypeName}
-                        onChange={e => setNewTypeName(e.target.value)}
-                        placeholder="اسم النوع (مثال: عيب مصنعي)"
-                        className="h-10 bg-background/50 rounded-xl flex-1"
-                        onKeyDown={e => { if (e.key === 'Enter') handleAddType(); }}
-                      />
+                {showTypeForm && (
+                  <div className="bg-muted/10 border border-primary/20 rounded-2xl p-5 space-y-5">
+                    <p className="text-sm font-semibold text-primary flex items-center gap-2">
+                      {typeFormMode === 'add' ? <Plus className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
+                      {typeFormMode === 'add' ? 'إضافة نوع شكوى جديد' : `تعديل النوع: ${typeFormData.name}`}
+                    </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground font-medium">اسم النوع *</label>
+                        <Input value={typeFormData.name} onChange={e => setTypeFormData(f => ({ ...f, name: e.target.value }))} placeholder="مثال: عيب مصنعي، شكوى خدمة..." className="h-10 bg-background/60 rounded-xl" />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground font-medium">الفئة</label>
+                        <select value={typeFormData.category} onChange={e => setTypeFormData(f => ({ ...f, category: e.target.value }))} className="w-full h-10 bg-background/60 border border-input rounded-xl px-3 text-sm text-foreground">
+                          <option value="">بدون فئة</option>
+                          <option value="جودة المنتج">جودة المنتج</option>
+                          <option value="خدمة ما بعد البيع">خدمة ما بعد البيع</option>
+                          <option value="فني صيانة">فني صيانة</option>
+                          <option value="توصيل وشحن">توصيل وشحن</option>
+                          <option value="فوترة ومدفوعات">فوترة ومدفوعات</option>
+                          <option value="أخرى">أخرى</option>
+                        </select>
+                      </div>
+                      <div className="md:col-span-2 space-y-1">
+                        <label className="text-xs text-muted-foreground font-medium">وصف مختصر (اختياري)</label>
+                        <textarea value={typeFormData.description} onChange={e => setTypeFormData(f => ({ ...f, description: e.target.value }))} placeholder="وصف يساعد الموظفين على فهم متى يستخدمون هذا النوع..." rows={2} className="w-full bg-background/60 border border-input rounded-xl px-3 py-2 text-sm text-foreground resize-none" />
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <label className="text-sm font-medium">حالة التفعيل</label>
+                        <button type="button" onClick={() => setTypeFormData(f => ({ ...f, is_active: !f.is_active }))} className={`relative w-12 h-6 rounded-full transition-colors ${typeFormData.is_active ? 'bg-primary' : 'bg-muted'}`}>
+                          <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${typeFormData.is_active ? 'right-1' : 'right-7'}`} />
+                        </button>
+                        <span className={`text-xs ${typeFormData.is_active ? 'text-green-400' : 'text-muted-foreground'}`}>{typeFormData.is_active ? 'فعال' : 'غير فعال'}</span>
+                      </div>
                     </div>
-                    <Input
-                      value={newTypeDesc}
-                      onChange={e => setNewTypeDesc(e.target.value)}
-                      placeholder="وصف مختصر (اختياري)"
-                      className="h-10 bg-background/50 rounded-xl"
-                    />
-                    <Button
-                      onClick={handleAddType}
-                      disabled={!newTypeName.trim() || addingType}
-                      className="rounded-xl h-10 w-full bg-primary hover:bg-primary/90 text-white"
-                    >
-                      <Plus className="w-4 h-4 mr-1" />
-                      {addingType ? 'جاري الإضافة...' : 'إضافة'}
-                    </Button>
+
+                    <div className="border-t border-border/40 pt-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold">الحقول الديناميكية ({typeFormFields.length})</p>
+                        <div className="flex gap-2">
+                          <Button variant="outline" onClick={() => setShowTypePreview(v => !v)} className="rounded-xl h-8 text-xs px-3 gap-1">
+                            <Eye className="w-3.5 h-3.5" /> {showTypePreview ? 'إخفاء المعاينة' : 'معاينة النموذج'}
+                          </Button>
+                          <Button onClick={addTypeField} className="rounded-xl h-8 bg-primary/10 hover:bg-primary/20 text-primary text-xs px-3 gap-1">
+                            <Plus className="w-3.5 h-3.5" /> إضافة حقل
+                          </Button>
+                        </div>
+                      </div>
+
+                      {typeFormFields.length === 0 && (
+                        <p className="text-xs text-muted-foreground text-center py-4 border border-dashed border-border/50 rounded-xl">لا توجد حقول — اضغط "إضافة حقل" لتعريف حقول النموذج الديناميكي</p>
+                      )}
+
+                      {typeFormFields.map((field, idx) => (
+                        <div key={field._id} className="bg-background/40 rounded-xl p-3 border border-border/30 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-muted-foreground font-medium">حقل #{idx + 1}</span>
+                            <button onClick={() => removeTypeField(field._id)} className="p-1 rounded-lg hover:bg-red-500/10 text-red-400 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                          </div>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                            <div className="col-span-2 space-y-1">
+                              <label className="text-xs text-muted-foreground">تسمية الحقل *</label>
+                              <Input value={field.label} onChange={e => updateTypeField(field._id, { label: e.target.value })} placeholder="مثال: المنتج، اللون، المقاس..." className="h-8 bg-background/60 rounded-lg text-sm" />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-xs text-muted-foreground">نوع الإدخال</label>
+                              <select value={field.type} onChange={e => updateTypeField(field._id, { type: e.target.value as ComplaintTypeFieldType })} className="w-full h-8 bg-background/60 border border-input rounded-lg px-2 text-xs text-foreground">
+                                {Object.entries(fieldTypeLabels).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                              </select>
+                            </div>
+                            <div className="flex items-end pb-0.5">
+                              <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
+                                <input type="checkbox" checked={field.required} onChange={e => updateTypeField(field._id, { required: e.target.checked })} className="accent-primary w-3.5 h-3.5" />
+                                إلزامي
+                              </label>
+                            </div>
+                          </div>
+                          {field.type === ComplaintTypeFieldType.select && (
+                            <div className="space-y-1">
+                              <label className="text-xs text-muted-foreground">خيارات القائمة (مفصولة بفواصل)</label>
+                              <Input value={field.options} onChange={e => updateTypeField(field._id, { options: e.target.value })} placeholder="خيار 1، خيار 2، خيار 3..." className="h-8 bg-background/60 rounded-lg text-sm" />
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {showTypePreview && typeFormFields.some(f => f.label.trim()) && (
+                      <div className="border border-border/40 rounded-xl p-4 bg-background/30 space-y-3">
+                        <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1"><Eye className="w-3.5 h-3.5" /> معاينة النموذج — {typeFormData.name || 'بدون اسم'}</p>
+                        {typeFormFields.filter(f => f.label.trim()).map(field => (
+                          <div key={field._id} className="space-y-1">
+                            <label className="text-xs font-medium">{field.label}{field.required && <span className="text-red-400 mr-0.5">*</span>}</label>
+                            {field.type === 'text' && <div className="h-8 bg-muted/30 border border-border/30 rounded-lg px-2 flex items-center text-xs text-muted-foreground">نص قصير...</div>}
+                            {field.type === 'textarea' && <div className="h-16 bg-muted/30 border border-border/30 rounded-lg p-2 text-xs text-muted-foreground">نص طويل...</div>}
+                            {field.type === 'number' && <div className="h-8 bg-muted/30 border border-border/30 rounded-lg px-2 flex items-center text-xs text-muted-foreground">0</div>}
+                            {field.type === 'date' && <div className="h-8 bg-muted/30 border border-border/30 rounded-lg px-2 flex items-center text-xs text-muted-foreground">يوم/شهر/سنة</div>}
+                            {field.type === 'select' && <div className="h-8 bg-muted/30 border border-border/30 rounded-lg px-2 flex items-center text-xs text-muted-foreground justify-between"><span>{field.options.split(',')[0]?.trim() || 'اختر...'}</span><span>▼</span></div>}
+                            {field.type === 'stars' && <div className="flex gap-1">{[1,2,3,4,5].map(s => <span key={s} className="text-muted-foreground text-lg">☆</span>)}</div>}
+                            {field.type === 'file' && <div className="h-8 bg-muted/30 border border-dashed border-border/50 rounded-lg px-2 flex items-center text-xs text-muted-foreground gap-1"><Upload className="w-3 h-3" /> اختر ملفاً...</div>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex gap-2 pt-1">
+                      <Button onClick={handleSaveType} disabled={!typeFormData.name.trim() || savingType} className="rounded-xl h-10 bg-primary hover:bg-primary/90 text-white px-6 gap-2">
+                        <Save className="w-4 h-4" /> {savingType ? 'جاري الحفظ...' : (typeFormMode === 'add' ? 'إضافة النوع' : 'حفظ التعديلات')}
+                      </Button>
+                      <Button variant="outline" onClick={() => setShowTypeForm(false)} className="rounded-xl h-10 px-4">إلغاء</Button>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className="rounded-xl border border-border/50 overflow-hidden">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/30">
                       <tr>
-                        <th className="text-right p-4 font-medium">#</th>
-                        <th className="text-right p-4 font-medium">اسم النوع</th>
-                        <th className="text-right p-4 font-medium">الوصف</th>
-                        <th className="p-4 font-medium text-left">حذف</th>
+                        <th className="text-right p-3 font-medium">اسم النوع</th>
+                        <th className="text-right p-3 font-medium hidden md:table-cell">الفئة</th>
+                        <th className="text-right p-3 font-medium hidden md:table-cell">الحقول</th>
+                        <th className="text-right p-3 font-medium">الحالة</th>
+                        <th className="text-left p-3 font-medium w-24">إجراءات</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/30">
                       {types.length === 0 ? (
-                        <tr><td colSpan={4} className="p-8 text-center text-muted-foreground text-sm">لا توجد أنواع — أضف نوعًا جديدًا أعلاه</td></tr>
-                      ) : types.map((tp: { id: number; name: string; description?: string }, i: number) => (
-                        <tr key={tp.id} className="hover:bg-muted/20">
-                          <td className="p-4 text-muted-foreground">{i + 1}</td>
-                          <td className="p-4 font-medium">{tp.name}</td>
-                          <td className="p-4 text-muted-foreground text-xs">{tp.description ?? '-'}</td>
-                          <td className="p-4 text-left">
-                            <button
-                              onClick={() => handleDeleteType(tp.id, tp.name)}
-                              className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                        <tr><td colSpan={5} className="p-8 text-center text-muted-foreground text-sm">لا توجد أنواع — اضغط "إضافة نوع جديد" للبدء</td></tr>
+                      ) : types.map((tp: { id: number; name: string; description?: string; category?: string; is_active?: boolean; fields: { name: string; label: string; type: string; required: boolean; options?: string[] }[] }) => (
+                        <tr key={tp.id} className="hover:bg-muted/20 transition-colors">
+                          <td className="p-3">
+                            <p className="font-medium">{tp.name}</p>
+                            {tp.description && <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-[200px]">{tp.description}</p>}
+                          </td>
+                          <td className="p-3 hidden md:table-cell">
+                            {tp.category ? <span className="px-2 py-0.5 rounded-lg text-xs bg-muted/40 text-muted-foreground">{tp.category}</span> : <span className="text-muted-foreground text-xs">-</span>}
+                          </td>
+                          <td className="p-3 hidden md:table-cell text-muted-foreground text-xs">{tp.fields?.length ?? 0} حقل</td>
+                          <td className="p-3">
+                            <span className={`flex items-center gap-1.5 text-xs ${tp.is_active !== false ? 'text-green-400' : 'text-muted-foreground'}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${tp.is_active !== false ? 'bg-green-400' : 'bg-muted-foreground'}`} />
+                              {tp.is_active !== false ? 'فعال' : 'معطّل'}
+                            </span>
+                          </td>
+                          <td className="p-3">
+                            <div className="flex gap-1 justify-end">
+                              <button onClick={() => openEditTypeForm(tp)} className="p-1.5 rounded-lg hover:bg-primary/10 text-primary transition-colors" title="تعديل"><Pencil className="w-4 h-4" /></button>
+                              <button onClick={() => handleDeleteType(tp.id, tp.name)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-red-400 transition-colors" title="حذف"><Trash2 className="w-4 h-4" /></button>
+                            </div>
                           </td>
                         </tr>
                       ))}

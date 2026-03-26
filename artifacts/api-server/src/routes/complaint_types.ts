@@ -18,9 +18,15 @@ router.get("/", requireAuth, async (req, res) => {
 
 router.post("/", requireAuth, requireRole("Manager/Voter", "Manager"), async (req, res) => {
   try {
-    const { name, fields } = req.body;
+    const { name, description, category, is_active, fields } = req.body;
     if (!name) { res.status(400).json({ error: "name is required" }); return; }
-    const [type] = await db.insert(complaintTypesTable).values({ name, fields: fields ?? [] }).returning();
+    const [type] = await db.insert(complaintTypesTable).values({
+      name,
+      description: description ?? null,
+      category: category ?? null,
+      is_active: is_active !== false,
+      fields: fields ?? [],
+    }).returning();
     res.status(201).json(type);
   } catch (err) {
     req.log.error({ err }, "Create complaint type error");
@@ -31,9 +37,12 @@ router.post("/", requireAuth, requireRole("Manager/Voter", "Manager"), async (re
 router.put("/:id", requireAuth, requireRole("Manager/Voter", "Manager"), async (req, res) => {
   try {
     const id = parseInt(req.params.id as string);
-    const { name, fields } = req.body;
+    const { name, description, category, is_active, fields } = req.body;
     const updates: Record<string, unknown> = {};
     if (name) updates.name = name;
+    if (description !== undefined) updates.description = description;
+    if (category !== undefined) updates.category = category;
+    if (is_active !== undefined) updates.is_active = is_active;
     if (fields !== undefined) updates.fields = fields;
     await db.update(complaintTypesTable).set(updates).where(eq(complaintTypesTable.id, id));
     const [type] = await db.select().from(complaintTypesTable).where(eq(complaintTypesTable.id, id)).limit(1);

@@ -235,6 +235,9 @@ export interface ComplaintTypeField {
 export interface ComplaintTypeItem {
   id: number;
   name: string;
+  description?: string;
+  category?: string;
+  is_active?: boolean;
   fields: ComplaintTypeField[];
 }
 
@@ -244,6 +247,9 @@ export interface ComplaintTypesListResponse {
 
 export interface CreateComplaintTypeRequest {
   name: string;
+  description?: string;
+  category?: string;
+  is_active?: boolean;
   fields: ComplaintTypeField[];
 }
 

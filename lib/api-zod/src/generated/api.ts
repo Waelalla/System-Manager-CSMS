@@ -551,6 +551,9 @@ export const ListComplaintTypesResponse = zod.object({
     zod.object({
       id: zod.number(),
       name: zod.string(),
+      description: zod.string().optional(),
+      category: zod.string().optional(),
+      is_active: zod.boolean().optional(),
       fields: zod.array(
         zod.object({
           name: zod.string(),
@@ -577,6 +580,9 @@ export const ListComplaintTypesResponse = zod.object({
  */
 export const CreateComplaintTypeBody = zod.object({
   name: zod.string(),
+  description: zod.string().optional(),
+  category: zod.string().optional(),
+  is_active: zod.boolean().optional(),
   fields: zod.array(
     zod.object({
       name: zod.string(),
@@ -605,6 +611,9 @@ export const UpdateComplaintTypeParams = zod.object({
 
 export const UpdateComplaintTypeBody = zod.object({
   name: zod.string(),
+  description: zod.string().optional(),
+  category: zod.string().optional(),
+  is_active: zod.boolean().optional(),
   fields: zod.array(
     zod.object({
       name: zod.string(),
@@ -627,6 +636,9 @@ export const UpdateComplaintTypeBody = zod.object({
 export const UpdateComplaintTypeResponse = zod.object({
   id: zod.number(),
   name: zod.string(),
+  description: zod.string().optional(),
+  category: zod.string().optional(),
+  is_active: zod.boolean().optional(),
   fields: zod.array(
     zod.object({
       name: zod.string(),

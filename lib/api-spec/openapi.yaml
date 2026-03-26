@@ -1705,6 +1705,12 @@ components:
           type: integer
         name:
           type: string
+        description:
+          type: string
+        category:
+          type: string
+        is_active:
+          type: boolean
         fields:
           type: array
           items:
@@ -1729,6 +1735,12 @@ components:
       properties:
         name:
           type: string
+        description:
+          type: string
+        category:
+          type: string
+        is_active:
+          type: boolean
         fields:
           type: array
           items:

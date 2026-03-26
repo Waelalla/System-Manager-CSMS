@@ -10,5 +10,8 @@ import type { ComplaintTypeField } from "./complaintTypeField";
 export interface ComplaintTypeItem {
   id: number;
   name: string;
+  description?: string;
+  category?: string;
+  is_active?: boolean;
   fields: ComplaintTypeField[];
 }

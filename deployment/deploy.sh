@@ -9,6 +9,14 @@ set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
+# Load .env so db:push and db:seed can access DATABASE_URL
+if [ -f "${PROJECT_ROOT}/.env" ]; then
+    set -a
+    # shellcheck source=/dev/null
+    source "${PROJECT_ROOT}/.env"
+    set +a
+fi
+
 echo ""
 echo "=================================================="
 echo "  CSMS — Deployment"
@@ -36,17 +44,22 @@ echo "▶  Pushing database schema..."
 pnpm run db:push
 echo "   ✓ Schema up to date"
 
-# --- 5. Ensure uploads directory exists ---
+# --- 5. Seed database (idempotent — safe to run every deploy) ---
+echo "▶  Seeding database..."
+pnpm run db:seed
+echo "   ✓ Seed complete"
+
+# --- 6. Ensure uploads directory exists (persisted between deployments) ---
 echo "▶  Ensuring uploads directory..."
-mkdir -p "$PROJECT_ROOT/artifacts/api-server/uploads"
+mkdir -p "${PROJECT_ROOT}/artifacts/api-server/uploads"
 echo "   ✓ Uploads directory ready"
 
-# --- 6. Ensure logs directory exists ---
+# --- 7. Ensure logs directory exists ---
 echo "▶  Ensuring logs directory..."
-mkdir -p "$PROJECT_ROOT/logs"
+mkdir -p "${PROJECT_ROOT}/logs"
 echo "   ✓ Logs directory ready"
 
-# --- 7. Reload PM2 (zero-downtime restart) ---
+# --- 8. Reload PM2 (zero-downtime restart) ---
 echo "▶  Reloading PM2 processes..."
 if pm2 list | grep -q "csms-api"; then
     pm2 reload ecosystem.config.cjs --update-env

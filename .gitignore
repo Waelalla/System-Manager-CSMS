@@ -52,4 +52,5 @@ replit.md
 replit.nix
 
 # Uploaded files (persisted on the server, not in git)
+uploads/
 artifacts/api-server/uploads/

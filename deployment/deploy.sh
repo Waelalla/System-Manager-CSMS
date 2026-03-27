@@ -35,8 +35,8 @@ pnpm install --frozen-lockfile
 echo "   ✓ Dependencies installed"
 
 # --- 3. Build all packages ---
-echo "▶  Building (typecheck + compile)..."
-pnpm run build
+echo "▶  Building frontend and API..."
+pnpm run build:all
 echo "   ✓ Build complete"
 
 # --- 4. Push database schema changes ---

@@ -47,3 +47,9 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+.replit
+replit.md
+replit.nix
+
+# Uploaded files (persisted on the server, not in git)
+artifacts/api-server/uploads/

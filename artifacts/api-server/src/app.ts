@@ -7,6 +7,9 @@ import { logger } from "./lib/logger";
 
 const app: Express = express();
 
+const isDev = process.env.NODE_ENV !== "production";
+const corsOrigin = process.env.CORS_ORIGIN;
+
 app.use(
   pinoHttp({
     logger,
@@ -26,7 +29,18 @@ app.use(
     },
   }),
 );
-app.use(cors());
+
+app.use(
+  cors(
+    isDev
+      ? {}
+      : {
+          origin: corsOrigin ?? false,
+          credentials: true,
+        },
+  ),
+);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

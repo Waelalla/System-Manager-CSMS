@@ -59,7 +59,7 @@ echo "▶  Ensuring logs directory..."
 mkdir -p "${PROJECT_ROOT}/logs"
 echo "   ✓ Logs directory ready"
 
-# --- 8. Reload PM2 (zero-downtime restart) ---
+# --- 8. Reload PM2 (zero-downtime restart for both csms-api and csms-web) ---
 echo "▶  Reloading PM2 processes..."
 if pm2 list | grep -q "csms-api"; then
     pm2 reload ecosystem.config.cjs --update-env
@@ -67,7 +67,7 @@ else
     pm2 start ecosystem.config.cjs
 fi
 pm2 save
-echo "   ✓ PM2 reloaded"
+echo "   ✓ PM2 reloaded (csms-api + csms-web)"
 
 echo ""
 echo "=================================================="

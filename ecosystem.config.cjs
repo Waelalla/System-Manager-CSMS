@@ -12,25 +12,32 @@
  * Run from the project root: /var/www/csms
  *
  * IMPORTANT — Secrets:
- *   Do NOT put real secrets in this file (it may be committed to git).
- *   Instead, put your secrets in /var/www/csms/.env and reference them via
- *   process.env inside the app.  PM2 will inherit environment variables from
- *   the shell that starts it, so running:
- *       source /var/www/csms/.env && pm2 start ecosystem.config.cjs
- *   or sourcing .env in deploy.sh (which this repo's deploy.sh already does)
- *   is the recommended approach.
+ *   Do NOT commit real secrets in this file.
+ *   Put your secrets in /var/www/csms/.env — the deploy.sh script sources it
+ *   before starting PM2 so all env vars are inherited automatically.
+ *
+ * Architecture overview:
+ *   Nginx (port 80/443)
+ *     ├── /api/*       → csms-api  (port 8080) — Express REST API
+ *     └── /*           → served from dist/public/ by Nginx directly (static files)
+ *
+ *   csms-web (port 3000) is kept running as a fallback / for direct-access testing.
+ *   In a fully configured Nginx setup, traffic never reaches csms-web; Nginx serves
+ *   the built frontend files from the filesystem instead.
  *
  * Uploads persistence:
  *   User-uploaded files are stored at: artifacts/api-server/uploads/
- *   This directory is created by deploy.sh and is NOT tracked by git.
- *   It persists across deployments automatically since git pull never
- *   removes untracked directories. Back it up separately if needed.
+ *   This path is NOT tracked by git — it persists across all deployments automatically
+ *   because "git pull" never removes untracked directories.
+ *   The deploy.sh script ensures this directory always exists (mkdir -p).
+ *   Back up this folder separately if needed (e.g. scp, rsync, or object storage).
  */
 
 const root = __dirname;
 
 module.exports = {
   apps: [
+    // ── API Server ───────────────────────────────────────────────────────────
     {
       name: "csms-api",
       script: "node",
@@ -43,8 +50,8 @@ module.exports = {
       env: {
         NODE_ENV: "production",
         PORT: "8080",
-        // Secrets are loaded from the shell environment (sourced from .env by deploy.sh).
-        // The placeholders below are ONLY used if the env vars are not already set.
+        // Env vars are loaded from .env by deploy.sh before PM2 starts.
+        // These fallback values only apply if the variable is not already set.
         DATABASE_URL: process.env.DATABASE_URL || "postgresql://csms_user:CHANGE_ME@localhost:5432/csms_db",
         JWT_SECRET: process.env.JWT_SECRET || "CHANGE_ME_TO_A_LONG_RANDOM_STRING",
         JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET || "CHANGE_ME_TO_ANOTHER_LONG_RANDOM_STRING",
@@ -52,6 +59,28 @@ module.exports = {
       },
       error_file: `${root}/logs/api-error.log`,
       out_file: `${root}/logs/api-out.log`,
+      log_date_format: "YYYY-MM-DD HH:mm:ss Z",
+    },
+
+    // ── Frontend Static Server ────────────────────────────────────────────────
+    // Serves the built React SPA via "serve" on port 3000.
+    // In production with Nginx: Nginx serves the same static files directly from
+    // the filesystem (artifacts/csms/dist/public/) for better performance.
+    // This process acts as a fallback and allows direct access without Nginx.
+    {
+      name: "csms-web",
+      script: "npx",
+      args: "serve dist/public --listen 3000 --no-clipboard --single",
+      cwd: `${root}/artifacts/csms`,
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: "256M",
+      env: {
+        NODE_ENV: "production",
+      },
+      error_file: `${root}/logs/web-error.log`,
+      out_file: `${root}/logs/web-out.log`,
       log_date_format: "YYYY-MM-DD HH:mm:ss Z",
     },
   ],

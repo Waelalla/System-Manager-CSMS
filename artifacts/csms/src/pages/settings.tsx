@@ -400,7 +400,7 @@ export default function Settings() {
           settings: {
             primary_color: portalForm.primary_color,
             company_logo: portalForm.company_logo,
-            public_form_fields: portalForm.public_form_fields as unknown as string,
+            public_form_fields: portalForm.public_form_fields,
           },
         },
       });

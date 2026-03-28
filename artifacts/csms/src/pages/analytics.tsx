@@ -9,14 +9,19 @@ import {
   type BranchAnalyticsBranchesItem,
   type DashboardStatsTrendItem,
 } from '@workspace/api-client-react';
+import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from '@/lib/i18n';
+import { useAuth } from '@/lib/auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Download } from 'lucide-react';
+import { Download, Medal, Star, TrendingUp } from 'lucide-react';
+
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, AreaChart, Area, Legend, LineChart, Line,
+  ResponsiveContainer, AreaChart, Area, Legend,
 } from 'recharts';
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 const COLORS = [
   'hsl(var(--primary))',
@@ -28,7 +33,37 @@ const COLORS = [
   '#06b6d4',
 ];
 
-type Tab = 'overview' | 'complaints' | 'invoices' | 'branches' | 'trend';
+type Tab = 'overview' | 'complaints' | 'invoices' | 'branches' | 'trend' | 'employees';
+
+type EmployeeStat = {
+  id: number;
+  name: string;
+  email: string;
+  role_name: string;
+  complaints_created: number;
+  complaints_resolved: number;
+  complaints_assigned: number;
+  follow_ups_done: number;
+  avg_customer_rating: number | null;
+  performance_score: number;
+};
+
+type EmployeeRange = 'all' | 'this_month' | 'last_month';
+
+function useGetEmployeeAnalytics(range: EmployeeRange) {
+  return useQuery<{ employees: EmployeeStat[] }>({
+    queryKey: ['/api/analytics/employees', range],
+    queryFn: async () => {
+      const token = localStorage.getItem('access_token');
+      const url = `${BASE}/api/analytics/employees${range !== 'all' ? `?range=${range}` : ''}`;
+      const res = await fetch(url, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error('Failed to fetch employee analytics');
+      return res.json() as Promise<{ employees: EmployeeStat[] }>;
+    },
+  });
+}
 
 function exportCsv(rows: Record<string, unknown>[], filename: string) {
   if (!rows.length) return;
@@ -45,11 +80,20 @@ function exportCsv(rows: Record<string, unknown>[], filename: string) {
 
 export default function Analytics() {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [tab, setTab] = useState<Tab>('overview');
+  const [empRange, setEmpRange] = useState<EmployeeRange>('all');
   const { data: stats, isLoading } = useGetDashboardStats();
   const { data: complaintAnalytics } = useGetComplaintAnalytics();
   const { data: invoiceAnalytics } = useGetInvoiceAnalytics();
   const { data: branchAnalytics } = useGetBranchAnalytics();
+
+  const canSeeEmployees =
+    user?.role_name === 'Manager' ||
+    user?.role_name === 'Manager/Voter' ||
+    user?.role_name === 'Maintenance Engineer';
+
+  const { data: employeeData, isLoading: empLoading } = useGetEmployeeAnalytics(empRange);
 
   if (isLoading) {
     return (
@@ -91,6 +135,7 @@ export default function Analytics() {
     { id: 'invoices', label: 'الفواتير' },
     { id: 'branches', label: 'الفروع' },
     { id: 'trend', label: 'الاتجاه الزمني' },
+    ...(canSeeEmployees ? [{ id: 'employees' as Tab, label: 'أداء الموظفين' }] : []),
   ];
 
   return (
@@ -333,10 +378,191 @@ export default function Analytics() {
           )}
         </div>
       )}
+
+      {tab === 'employees' && canSeeEmployees && (
+        <EmployeesTab
+          data={employeeData?.employees ?? []}
+          isLoading={empLoading}
+          range={empRange}
+          onRangeChange={setEmpRange}
+          isManager={user?.role_name === 'Manager' || user?.role_name === 'Manager/Voter'}
+        />
+      )}
     </div>
   );
 }
 
 function EmptyChart() {
   return <div className="h-full flex items-center justify-center text-muted-foreground text-sm">لا توجد بيانات</div>;
+}
+
+const MEDAL_COLORS = ['#F59E0B', '#9CA3AF', '#CD7C3B'];
+const MEDAL_LABELS = ['🥇', '🥈', '🥉'];
+
+const RANGE_OPTIONS: { value: EmployeeRange; label: string }[] = [
+  { value: 'all', label: 'كل الوقت' },
+  { value: 'this_month', label: 'هذا الشهر' },
+  { value: 'last_month', label: 'الشهر الماضي' },
+];
+
+function StarDisplay({ value }: { value: number | null }) {
+  if (value === null) return <span className="text-muted-foreground text-xs">—</span>;
+  return (
+    <span className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map(s => (
+        <Star
+          key={s}
+          className="w-3 h-3"
+          fill={value >= s ? '#F59E0B' : 'transparent'}
+          style={{ color: value >= s ? '#F59E0B' : '#6b7280' }}
+        />
+      ))}
+      <span className="text-xs text-muted-foreground mr-1">{value.toFixed(1)}</span>
+    </span>
+  );
+}
+
+function EmployeesTab({
+  data,
+  isLoading,
+  range,
+  onRangeChange,
+  isManager,
+}: {
+  data: EmployeeStat[];
+  isLoading: boolean;
+  range: EmployeeRange;
+  onRangeChange: (r: EmployeeRange) => void;
+  isManager: boolean;
+}) {
+  const handleExport = () => {
+    exportCsv(
+      data.map((e, i) => ({
+        الترتيب: i + 1,
+        الاسم: e.name,
+        الدور: e.role_name,
+        شكاوى_مسجلة: e.complaints_created,
+        شكاوى_محلولة: e.complaints_resolved,
+        متابعات_منجزة: e.follow_ups_done,
+        متوسط_التقييم: e.avg_customer_rating ?? '',
+        نقاط_الأداء: e.performance_score,
+      })),
+      'employee_performance.csv'
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex gap-2">
+          {RANGE_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => onRangeChange(opt.value)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${range === opt.value ? 'bg-primary/10 text-primary border border-primary/30' : 'border border-border/50 text-muted-foreground hover:bg-muted'}`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        {isManager && (
+          <Button variant="outline" size="sm" className="rounded-xl gap-2" onClick={handleExport}>
+            <Download className="w-4 h-4" /> تصدير CSV
+          </Button>
+        )}
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-3">
+          {[1, 2, 3].map(i => <div key={i} className="h-16 bg-card rounded-xl animate-pulse" />)}
+        </div>
+      ) : data.length === 0 ? (
+        <Card className="bg-card/80 shadow-xl rounded-2xl border-white/5">
+          <CardContent className="h-40 flex items-center justify-center text-muted-foreground">لا توجد بيانات</CardContent>
+        </Card>
+      ) : (
+        <Card className="bg-card/80 shadow-xl rounded-2xl border-white/5 overflow-hidden">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-primary" />
+              ترتيب الأداء الوظيفي
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border/50 bg-muted/20">
+                    <th className="text-right py-3 px-4 text-xs text-muted-foreground font-medium">#</th>
+                    <th className="text-right py-3 px-4 text-xs text-muted-foreground font-medium">الموظف</th>
+                    <th className="text-right py-3 px-4 text-xs text-muted-foreground font-medium">شكاوى مُسجَّلة</th>
+                    <th className="text-right py-3 px-4 text-xs text-muted-foreground font-medium">شكاوى محلولة</th>
+                    <th className="text-right py-3 px-4 text-xs text-muted-foreground font-medium">متابعات منجزة</th>
+                    <th className="text-right py-3 px-4 text-xs text-muted-foreground font-medium">متوسط التقييم</th>
+                    <th className="text-right py-3 px-4 text-xs text-muted-foreground font-medium">نقاط الأداء</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.map((emp, idx) => (
+                    <tr
+                      key={emp.id}
+                      className={`border-b border-border/30 hover:bg-muted/10 transition-colors ${idx < 3 ? 'bg-gradient-to-r from-transparent' : ''}`}
+                    >
+                      <td className="py-3 px-4">
+                        {idx < 3 ? (
+                          <span className="text-lg" title={`المركز ${idx + 1}`}>{MEDAL_LABELS[idx]}</span>
+                        ) : (
+                          <span className="text-muted-foreground">{idx + 1}</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex flex-col">
+                          <span className="font-medium text-foreground">{emp.name}</span>
+                          <span
+                            className="text-xs px-1.5 py-0.5 rounded-md mt-0.5 w-fit"
+                            style={{
+                              background: idx < 3 ? `${MEDAL_COLORS[idx]}20` : 'hsl(var(--muted))',
+                              color: idx < 3 ? MEDAL_COLORS[idx] : 'hsl(var(--muted-foreground))',
+                            }}
+                          >
+                            {emp.role_name}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <span className="font-semibold">{emp.complaints_created}</span>
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <span className="font-semibold text-green-500">{emp.complaints_resolved}</span>
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <span className="font-semibold text-blue-500">{emp.follow_ups_done}</span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <StarDisplay value={emp.avg_customer_rating} />
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 bg-muted/30 rounded-full h-2 min-w-[60px]">
+                            <div
+                              className="h-2 rounded-full transition-all"
+                              style={{
+                                width: `${emp.performance_score}%`,
+                                background: idx === 0 ? '#F59E0B' : idx === 1 ? '#9CA3AF' : idx === 2 ? '#CD7C3B' : 'hsl(var(--primary))',
+                              }}
+                            />
+                          </div>
+                          <span className="text-xs font-bold text-foreground min-w-[28px] text-left">{emp.performance_score}</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
 }

@@ -12,6 +12,7 @@ import {
   branchChangeLogsTable,
 } from "@workspace/db";
 import { eq, count, sql, avg, and, gte, lte } from "drizzle-orm";
+import { rolesTable } from "@workspace/db";
 import { requireAuth, requireRole } from "../lib/auth.js";
 
 const router = Router();
@@ -198,5 +199,127 @@ router.get("/branches", requireAuth, requireRole("Manager", "Manager/Voter"), as
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
+router.get(
+  "/employees",
+  requireAuth,
+  requireRole("Manager", "Manager/Voter", "Maintenance Engineer"),
+  async (req, res) => {
+    try {
+      const { range } = req.query as { range?: string };
+
+      let dateCondition: ReturnType<typeof gte> | undefined;
+      if (range === "this_month") {
+        dateCondition = gte(complaintsTable.created_at, sql`date_trunc('month', now())`);
+      } else if (range === "last_month") {
+        dateCondition = gte(
+          complaintsTable.created_at,
+          sql`date_trunc('month', now()) - interval '1 month'`
+        );
+      }
+
+      const allUsers = await db
+        .select({
+          id: usersTable.id,
+          name: usersTable.name,
+          email: usersTable.email,
+          role_name: rolesTable.name,
+        })
+        .from(usersTable)
+        .leftJoin(rolesTable, eq(usersTable.role_id, rolesTable.id))
+        .orderBy(usersTable.name);
+
+      const complaintsCreated = await db
+        .select({
+          user_id: complaintsTable.created_by,
+          count: count(),
+        })
+        .from(complaintsTable)
+        .where(
+          dateCondition
+            ? and(sql`${complaintsTable.created_by} is not null`, dateCondition)
+            : sql`${complaintsTable.created_by} is not null`
+        )
+        .groupBy(complaintsTable.created_by);
+
+      const complaintsResolved = await db
+        .select({
+          user_id: complaintsTable.resolved_by,
+          count: count(),
+        })
+        .from(complaintsTable)
+        .where(
+          dateCondition
+            ? and(sql`${complaintsTable.resolved_by} is not null`, dateCondition)
+            : sql`${complaintsTable.resolved_by} is not null`
+        )
+        .groupBy(complaintsTable.resolved_by);
+
+      const complaintsAssigned = await db
+        .select({
+          user_id: complaintsTable.assigned_to_id,
+          count: count(),
+        })
+        .from(complaintsTable)
+        .where(sql`${complaintsTable.assigned_to_id} is not null`)
+        .groupBy(complaintsTable.assigned_to_id);
+
+      const followUpsDone = await db
+        .select({
+          user_id: followUpsTable.assigned_user_id,
+          count: count(),
+          avg_rating: avg(followUpsTable.rating),
+        })
+        .from(followUpsTable)
+        .groupBy(followUpsTable.assigned_user_id);
+
+      const createdMap = new Map(complaintsCreated.map((r) => [r.user_id, r.count]));
+      const resolvedMap = new Map(complaintsResolved.map((r) => [r.user_id, r.count]));
+      const assignedMap = new Map(complaintsAssigned.map((r) => [r.user_id, r.count]));
+      const followUpMap = new Map(
+        followUpsDone.map((r) => [r.user_id, { count: r.count, avg_rating: r.avg_rating }])
+      );
+
+      const allResolved = complaintsResolved.reduce((sum, r) => sum + r.count, 0);
+      const allFollowUps = followUpsDone.reduce((sum, r) => sum + r.count, 0);
+      const maxScore = Math.max(allResolved * 2 + allFollowUps * 1, 1);
+
+      const employees = allUsers.map((user) => {
+        const complaints_created = createdMap.get(user.id) ?? 0;
+        const complaints_resolved = resolvedMap.get(user.id) ?? 0;
+        const complaints_assigned = assignedMap.get(user.id) ?? 0;
+        const follow_ups_done = followUpMap.get(user.id)?.count ?? 0;
+        const avg_rating_raw = followUpMap.get(user.id)?.avg_rating;
+        const avg_customer_rating =
+          avg_rating_raw != null
+            ? Math.round(parseFloat(avg_rating_raw as unknown as string) * 10) / 10
+            : null;
+
+        const rawScore = complaints_resolved * 2 + follow_ups_done * 1;
+        const performance_score = Math.min(100, Math.round((rawScore / maxScore) * 100));
+
+        return {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role_name: user.role_name ?? "",
+          complaints_created,
+          complaints_resolved,
+          complaints_assigned,
+          follow_ups_done,
+          avg_customer_rating,
+          performance_score,
+        };
+      });
+
+      employees.sort((a, b) => b.performance_score - a.performance_score);
+
+      res.json({ employees });
+    } catch (err) {
+      req.log.error({ err }, "Analytics employees error");
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  }
+);
 
 export default router;

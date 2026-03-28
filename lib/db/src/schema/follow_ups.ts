@@ -9,6 +9,7 @@ export const followUpsTable = pgTable("follow_ups", {
   invoice_id: integer("invoice_id").notNull().references(() => invoicesTable.id),
   assigned_user_id: integer("assigned_user_id").notNull().references(() => usersTable.id),
   notes: jsonb("notes"),
+  rating: integer("rating"),
   status: text("status").notNull().default("pending"),
   created_at: timestamp("created_at").defaultNow().notNull(),
 });

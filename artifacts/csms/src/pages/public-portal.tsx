@@ -43,11 +43,25 @@ async function fetchComplaintTypes(): Promise<ComplaintType[]> {
   return json.data;
 }
 
-async function submitComplaint(payload: Record<string, unknown>): Promise<{ reference_number: string; success_message?: string }> {
+async function submitComplaint(
+  payload: Record<string, unknown>,
+  file?: File | null,
+): Promise<{ reference_number: string; success_message?: string }> {
+  const formData = new FormData();
+  for (const [key, value] of Object.entries(payload)) {
+    if (value === undefined || value === null) continue;
+    if (typeof value === 'object') {
+      formData.append(key, JSON.stringify(value));
+    } else {
+      formData.append(key, String(value));
+    }
+  }
+  if (file) {
+    formData.append('file', file);
+  }
   const res = await fetch(`${BASE}/api/public/complaints`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+    body: formData,
   });
   const json = await res.json() as { reference_number: string; success_message?: string; error?: string };
   if (!res.ok) throw new Error(json.error ?? 'فشل الإرسال');
@@ -129,7 +143,7 @@ export default function PublicPortal() {
         date: form.date,
         fields_values: { ...dynamicFields, ...starRatings },
       };
-      const result = await submitComplaint(payload);
+      const result = await submitComplaint(payload, uploadedFile);
       setSubmitted(result);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'فشل الإرسال، يرجى المحاولة مجدداً';
@@ -532,10 +546,13 @@ export default function PublicPortal() {
           )}
         </AnimatePresence>
 
-        <div className="mt-6 text-center">
-          <Link href="/login" className="text-xs text-gray-600 hover:text-gray-400 transition-colors">الإدارة</Link>
-        </div>
       </div>
+      <Link
+        href="/login"
+        className="fixed bottom-4 left-4 text-xs text-gray-700 hover:text-gray-500 transition-colors z-50"
+      >
+        الإدارة
+      </Link>
     </div>
   );
 }

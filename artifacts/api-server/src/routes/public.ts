@@ -1,4 +1,7 @@
 import { Router } from "express";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
 import { db } from "@workspace/db";
 import {
   settingsTable,
@@ -9,6 +12,30 @@ import {
 import { eq, and } from "drizzle-orm";
 
 const router = Router();
+
+const uploadsDir = path.resolve(process.cwd(), "uploads");
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, uploadsDir),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const name = `pub-${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
+    cb(null, name);
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = /jpg|jpeg|png|gif|webp|pdf|doc|docx/i;
+    const ext = path.extname(file.originalname).slice(1);
+    cb(null, allowed.test(ext));
+  },
+});
 
 router.get("/settings", async (req, res) => {
   try {
@@ -45,7 +72,7 @@ router.get("/complaint-types", async (req, res) => {
   }
 });
 
-router.post("/complaints", async (req, res) => {
+router.post("/complaints", upload.single("file"), async (req, res) => {
   try {
     const body = req.body as {
       customer_name?: string;
@@ -54,31 +81,48 @@ router.post("/complaints", async (req, res) => {
       customer_national_id?: string;
       customer_address?: string;
       customer_governorate?: string;
-      type_id?: number;
+      type_id?: string | number;
       description?: string;
-      fields_values?: Record<string, unknown>;
+      fields_values?: string;
       date?: string;
     };
 
     if (!body.customer_name?.trim()) {
       return res.status(400).json({ error: "اسم العميل مطلوب" });
     }
-    if (!body.type_id) {
+    const typeId = body.type_id ? Number(body.type_id) : 0;
+    if (!typeId) {
       return res.status(400).json({ error: "نوع الشكوى مطلوب" });
     }
 
     const [type] = await db
       .select()
       .from(complaintTypesTable)
-      .where(and(eq(complaintTypesTable.id, body.type_id), eq(complaintTypesTable.is_active, true)))
+      .where(and(eq(complaintTypesTable.id, typeId), eq(complaintTypesTable.is_active, true)))
       .limit(1);
 
     if (!type) {
       return res.status(400).json({ error: "نوع الشكوى غير موجود" });
     }
 
+    let fieldsValues: Record<string, unknown> = {};
+    if (body.fields_values) {
+      try {
+        fieldsValues = JSON.parse(body.fields_values) as Record<string, unknown>;
+      } catch {
+        fieldsValues = {};
+      }
+    }
+
+    if (req.file) {
+      const fileUrl = `/api/uploads/${req.file.filename}`;
+      fieldsValues["_uploaded_file"] = fileUrl;
+      fieldsValues["_uploaded_file_name"] = req.file.originalname;
+    }
+
     let customerId: number;
     const phoneVal = body.customer_phone?.trim();
+    const emailVal = body.customer_email?.trim();
     const existingCustomers = phoneVal
       ? await db
           .select()
@@ -89,8 +133,22 @@ router.post("/complaints", async (req, res) => {
 
     if (existingCustomers.length > 0) {
       customerId = existingCustomers[0].id;
+      if (emailVal) {
+        const existing = existingCustomers[0];
+        const existingExtra = (existing.extra as Record<string, unknown>) ?? {};
+        if (!existingExtra.email) {
+          await db
+            .update(customersTable)
+            .set({ extra: { ...existingExtra, email: emailVal } })
+            .where(eq(customersTable.id, customerId));
+        }
+      }
     } else {
       const code = `PUB-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+      const extraData: Record<string, unknown> = {};
+      if (emailVal) extraData.email = emailVal;
+      if (body.customer_national_id?.trim()) extraData.national_id = body.customer_national_id.trim();
+
       const [newCustomer] = await db
         .insert(customersTable)
         .values({
@@ -100,6 +158,7 @@ router.post("/complaints", async (req, res) => {
           type: "عميل بوابة",
           governorate: body.customer_governorate?.trim() ?? "غير محدد",
           address: body.customer_address?.trim() ?? undefined,
+          extra: Object.keys(extraData).length > 0 ? extraData : undefined,
         })
         .returning({ id: customersTable.id });
       customerId = newCustomer.id;
@@ -111,13 +170,13 @@ router.post("/complaints", async (req, res) => {
       .insert(complaintsTable)
       .values({
         customer_id: customerId,
-        type_id: body.type_id,
+        type_id: typeId,
         channel: "بوابة إلكترونية",
         priority: "عادية",
         description:
           body.description?.trim() ||
           `شكوى عبر البوابة الإلكترونية - ${type.name}`,
-        fields_values: body.fields_values ?? {},
+        fields_values: fieldsValues,
         status: "جديدة",
         created_at: complaintDate,
       })

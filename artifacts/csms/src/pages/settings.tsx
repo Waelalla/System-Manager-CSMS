@@ -1,4 +1,4 @@
-import { useState, useRef, Fragment } from 'react';
+import { useState, useRef, Fragment, useEffect } from 'react';
 import { useTranslation } from '@/lib/i18n';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -173,6 +173,32 @@ export default function Settings() {
 
   const [typeSuccessMessages, setTypeSuccessMessages] = useState<Record<number, string>>({});
   const [savingSuccessMsg, setSavingSuccessMsg] = useState<Record<number, boolean>>({});
+
+  useEffect(() => {
+    if (!rawSettings) return;
+    const s = (rawSettings as unknown as SettingsRecord);
+    setPortalForm({
+      primary_color: String(s.primary_color ?? '#6366f1'),
+      company_logo: String(s.company_logo ?? ''),
+      public_form_fields: Array.isArray(s.public_form_fields)
+        ? (s.public_form_fields as string[])
+        : ['name', 'phone', 'complaint_type', 'date'],
+    });
+  }, [rawSettings]);
+
+  useEffect(() => {
+    if (!typesData) return;
+    const typesArr = (typesData as unknown as { data?: { id: number; success_message?: string }[] })?.data ?? [];
+    setTypeSuccessMessages(prev => {
+      const merged = { ...prev };
+      for (const tp of typesArr) {
+        if (merged[tp.id] === undefined && tp.success_message !== undefined) {
+          merged[tp.id] = tp.success_message ?? '';
+        }
+      }
+      return merged;
+    });
+  }, [typesData]);
 
   const openAddTypeForm = () => {
     setTypeFormMode('add');

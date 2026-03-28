@@ -5,7 +5,7 @@ import {
   complaintTypesTable, usersTable, complaintLogsTable, feedbackTable,
   branchesTable, notificationsTable
 } from "@workspace/db";
-import { eq, count, and, sql, gte, lte } from "drizzle-orm";
+import { eq, count, and, or, ilike, sql, gte, lte } from "drizzle-orm";
 import { requireAuth, requireRole, type AuthRequest } from "../lib/auth.js";
 import { parsePagination, buildPaginated } from "../lib/pagination.js";
 import { validateBody } from "../lib/validate.js";
@@ -37,16 +37,30 @@ router.get("/", requireAuth, async (req, res) => {
     if (date_from) conditions.push(gte(complaintsTable.created_at, new Date(date_from)));
     if (date_to) conditions.push(lte(complaintsTable.created_at, new Date(date_to)));
     if (channel) conditions.push(eq(complaintsTable.channel, channel));
-    if (search) {
-      const searchId = parseInt(search.replace(/[^0-9]/g, ''));
-      if (!isNaN(searchId) && searchId > 0) {
-        conditions.push(eq(complaintsTable.id, searchId));
+
+    let searchCondition: ReturnType<typeof or> | undefined;
+    if (search?.trim()) {
+      const term = search.trim();
+      const searchId = parseInt(term.replace(/[^0-9]/g, ''));
+      const orParts: ReturnType<typeof eq>[] = [];
+      if (!isNaN(searchId) && searchId > 0 && /^\d+$/.test(term.replace(/^#/, ''))) {
+        orParts.push(eq(complaintsTable.id, searchId));
       }
+      orParts.push(ilike(customersTable.name, `%${term}%`) as ReturnType<typeof eq>);
+      orParts.push(ilike(customersTable.phone, `%${term}%`) as ReturnType<typeof eq>);
+      searchCondition = or(...orParts);
     }
 
-    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    const baseWhere = conditions.length > 0 ? and(...conditions) : undefined;
+    const whereClause = baseWhere && searchCondition
+      ? and(baseWhere, searchCondition)
+      : searchCondition ?? baseWhere;
 
-    const [totalResult] = await db.select({ count: count() }).from(complaintsTable).where(whereClause);
+    const [totalResult] = await db
+      .select({ count: count() })
+      .from(complaintsTable)
+      .leftJoin(customersTable, eq(complaintsTable.customer_id, customersTable.id))
+      .where(whereClause);
 
     const complaints = await db
       .select({

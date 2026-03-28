@@ -91,7 +91,7 @@ export default function Complaints() {
         <Input
           value={searchInput}
           onChange={e => handleSearchChange(e.target.value)}
-          placeholder="بحث برقم الشكوى (مثال: 123 أو #123)"
+          placeholder="بحث برقم الشكوى، الاسم، أو رقم الهاتف..."
           className="pr-10 h-11 rounded-xl border-border/50"
           dir="rtl"
         />

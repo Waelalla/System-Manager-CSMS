@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useListComplaints } from '@workspace/api-client-react';
-import { Globe, Eye, X, ChevronDown, Filter } from 'lucide-react';
+import { Globe, Eye, X, ChevronDown, Filter, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Link, useLocation } from 'wouter';
 
@@ -14,6 +15,9 @@ export default function PortalComplaints() {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [showFilters, setShowFilters] = useState(false);
+  const [searchInput, setSearchInput] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -21,11 +25,21 @@ export default function PortalComplaints() {
     if (s) { setStatusFilter(s); setShowFilters(true); }
   }, [location]);
 
+  const handleSearchChange = (val: string) => {
+    setSearchInput(val);
+    if (searchDebounce.current) clearTimeout(searchDebounce.current);
+    searchDebounce.current = setTimeout(() => {
+      setSearchQuery(val.trim());
+      setPage(1);
+    }, 400);
+  };
+
   const { data, isLoading } = useListComplaints({
     page,
     limit: 15,
     status: statusFilter || undefined,
     channel: PORTAL_CHANNEL,
+    search: searchQuery || undefined,
   });
 
   const getStatusColor = (status: string) => {
@@ -70,6 +84,25 @@ export default function PortalComplaints() {
             <ChevronDown className={`w-4 h-4 mr-1 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
           </Button>
         </div>
+      </div>
+
+      <div className="relative">
+        <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+        <Input
+          value={searchInput}
+          onChange={e => handleSearchChange(e.target.value)}
+          placeholder="بحث برقم الشكوى، الاسم، أو رقم الهاتف..."
+          className="pr-10 h-11 rounded-xl border-border/50"
+          dir="rtl"
+        />
+        {searchInput && (
+          <button
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            onClick={() => { setSearchInput(''); setSearchQuery(''); setPage(1); }}
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {showFilters && (
@@ -124,7 +157,9 @@ export default function PortalComplaints() {
                     <div className="flex flex-col items-center gap-3">
                       <Globe className="w-10 h-10 text-muted-foreground/30" />
                       <p className="text-muted-foreground">
-                        لا توجد شكاوى من البوابة الإلكترونية {statusFilter ? `بحالة "${statusFilter}"` : ''}
+                        {searchQuery
+                          ? `لا توجد نتائج للبحث عن "${searchQuery}"`
+                          : `لا توجد شكاوى من البوابة الإلكترونية ${statusFilter ? `بحالة "${statusFilter}"` : ''}`}
                       </p>
                     </div>
                   </TableCell>

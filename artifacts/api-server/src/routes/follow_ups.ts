@@ -59,17 +59,19 @@ router.post("/", requireAuth, requireRole("Accountant", "Customer Service Agent"
     const autoComplaints = [];
 
     for (const invoice_id of invoice_ids) {
-      const [fu] = await db.insert(followUpsTable).values({
-        invoice_id,
-        assigned_user_id,
-        notes: notes ?? null,
-        status: "completed",
-      }).returning();
-      created.push(fu);
-
       const rating = typeof notes === "object" && notes !== null && "rating" in notes
         ? Number((notes as { rating?: unknown }).rating)
         : null;
+
+      const [fu] = await db.insert(followUpsTable).values({
+        invoice_id,
+        assigned_user_id,
+        created_by: req.user!.userId,
+        notes: notes ?? null,
+        rating: rating !== null && !isNaN(rating) ? rating : null,
+        status: "completed",
+      }).returning();
+      created.push(fu);
 
       if (rating !== null && rating <= 2) {
         const [invoice] = await db

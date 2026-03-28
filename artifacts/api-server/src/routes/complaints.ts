@@ -91,7 +91,8 @@ router.post("/", requireAuth, requireRole("Customer Service Agent", "Manager/Vot
     const [complaint] = await db.insert(complaintsTable).values({
       customer_id, product_id: product_id ?? null, invoice_id: invoice_id ?? null,
       type_id, fields_values: fields_values ?? null, channel, priority,
-      description, images: images ?? null, status: "جديدة"
+      description, images: images ?? null, status: "جديدة",
+      created_by: req.user!.userId,
     }).returning();
 
     await logComplaintAction(complaint.id, "إنشاء الشكوى", req.user!.userId, "تم إنشاء الشكوى");
@@ -212,7 +213,10 @@ router.put("/:id/status", requireAuth, requireRole("Customer Service Agent", "Ma
 
     const updateData: Record<string, unknown> = { status };
     if (status === "مستلمة") updateData.assigned_to_id = req.user!.userId;
-    if (status === "محلول") updateData.resolved_at = new Date();
+    if (status === "محلول") {
+      updateData.resolved_at = new Date();
+      updateData.resolved_by = req.user!.userId;
+    }
 
     await db.update(complaintsTable).set(updateData).where(eq(complaintsTable.id, id));
     await logComplaintAction(id, `تغيير الحالة إلى: ${status}`, req.user!.userId, note);

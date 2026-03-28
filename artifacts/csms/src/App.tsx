@@ -14,6 +14,7 @@ import PublicPortal from "@/pages/public-portal";
 import Dashboard from "@/pages/dashboard";
 import Customers from "@/pages/customers";
 import Complaints from "@/pages/complaints";
+import PortalComplaints from "@/pages/portal-complaints";
 import ComplaintDetail from "@/pages/complaint-detail";
 import ComplaintNew from "@/pages/complaint-new";
 import Invoices from "@/pages/invoices";
@@ -107,6 +108,7 @@ function AuthenticatedRoutes() {
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/customers" component={Customers} />
         <Route path="/complaints" component={Complaints} />
+        <Route path="/portal-complaints" component={PortalComplaints} />
         <Route path="/complaints/new" component={ComplaintNew} />
         <Route path="/complaints/:id" component={ComplaintDetail} />
         <Route path="/invoices" component={Invoices} />

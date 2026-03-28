@@ -1,23 +1,19 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useListComplaints } from '@workspace/api-client-react';
-import { useTranslation } from '@/lib/i18n';
-import { Plus, Filter, Eye, X, ChevronDown, Search } from 'lucide-react';
+import { Globe, Eye, X, ChevronDown, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Link, useLocation } from 'wouter';
 
 const ALL_STATUSES = ['جديدة', 'مستلمة', 'جاري المعالجة', 'مصعدة', 'تصعيد إداري', 'محلول', 'مغلق', 'مرفوض'];
 
-export default function Complaints() {
-  const { t } = useTranslation();
+const PORTAL_CHANNEL = 'بوابة إلكترونية';
+
+export default function PortalComplaints() {
   const [location] = useLocation();
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [showFilters, setShowFilters] = useState(false);
-  const [searchInput, setSearchInput] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -25,20 +21,11 @@ export default function Complaints() {
     if (s) { setStatusFilter(s); setShowFilters(true); }
   }, [location]);
 
-  const handleSearchChange = (val: string) => {
-    setSearchInput(val);
-    if (searchDebounce.current) clearTimeout(searchDebounce.current);
-    searchDebounce.current = setTimeout(() => {
-      setSearchQuery(val.trim());
-      setPage(1);
-    }, 400);
-  };
-
   const { data, isLoading } = useListComplaints({
     page,
     limit: 15,
     status: statusFilter || undefined,
-    search: searchQuery || undefined,
+    channel: PORTAL_CHANNEL,
   });
 
   const getStatusColor = (status: string) => {
@@ -63,8 +50,13 @@ export default function Complaints() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">{t('complaints.title')}</h1>
-          <p className="text-muted-foreground mt-1">تتبع وحل مشاكل العملاء بكفاءة</p>
+          <div className="flex items-center gap-3 mb-1">
+            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center">
+              <Globe className="w-5 h-5 text-indigo-400" />
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">شكاوى البوابة الإلكترونية</h1>
+          </div>
+          <p className="text-muted-foreground mt-1 mr-13">الشكاوى المقدمة من العملاء عبر البوابة العامة</p>
         </div>
         <div className="flex items-center gap-3">
           <Button
@@ -73,36 +65,11 @@ export default function Complaints() {
             onClick={() => setShowFilters(f => !f)}
           >
             <Filter className="w-4 h-4 mr-2" />
-            تصفية
+            تصفية بالحالة
             {statusFilter && <span className="mr-2 px-2 py-0.5 rounded-full bg-primary/20 text-primary text-xs">{statusFilter}</span>}
             <ChevronDown className={`w-4 h-4 mr-1 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
           </Button>
-          <Link href="/complaints/new">
-            <Button className="rounded-xl shadow-lg shadow-primary/20 bg-gradient-to-r from-primary to-accent hover:opacity-90 hover:-translate-y-0.5 transition-all">
-              <Plus className="w-5 h-5 mr-2" />
-              {t('complaints.add')}
-            </Button>
-          </Link>
         </div>
-      </div>
-
-      <div className="relative">
-        <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-        <Input
-          value={searchInput}
-          onChange={e => handleSearchChange(e.target.value)}
-          placeholder="بحث برقم الشكوى (مثال: 123 أو #123)"
-          className="pr-10 h-11 rounded-xl border-border/50"
-          dir="rtl"
-        />
-        {searchInput && (
-          <button
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            onClick={() => { setSearchInput(''); setSearchQuery(''); setPage(1); }}
-          >
-            <X className="w-4 h-4" />
-          </button>
-        )}
       </div>
 
       {showFilters && (
@@ -138,8 +105,9 @@ export default function Complaints() {
           <Table>
             <TableHeader className="bg-muted/30">
               <TableRow>
-                <TableHead>رقم</TableHead>
+                <TableHead>رقم المرجع</TableHead>
                 <TableHead>العميل</TableHead>
+                <TableHead>الهاتف</TableHead>
                 <TableHead>النوع</TableHead>
                 <TableHead>الأولوية</TableHead>
                 <TableHead>الحالة</TableHead>
@@ -149,23 +117,34 @@ export default function Complaints() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground">جاري التحميل...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground">جاري التحميل...</TableCell></TableRow>
               ) : complaints.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
-                  {searchQuery ? `لا توجد نتائج للبحث عن "${searchQuery}"` : `لا توجد شكاوى ${statusFilter ? `بحالة "${statusFilter}"` : ''}`}
-                </TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-16">
+                    <div className="flex flex-col items-center gap-3">
+                      <Globe className="w-10 h-10 text-muted-foreground/30" />
+                      <p className="text-muted-foreground">
+                        لا توجد شكاوى من البوابة الإلكترونية {statusFilter ? `بحالة "${statusFilter}"` : ''}
+                      </p>
+                    </div>
+                  </TableCell>
+                </TableRow>
               ) : (
                 complaints.map((c: {
                   id: number;
                   customer_name?: string;
+                  customer_phone?: string;
                   type_name?: string;
                   priority?: string;
                   status: string;
                   created_at?: string;
                 }) => (
                   <TableRow key={c.id} className="hover:bg-muted/20 transition-colors">
-                    <TableCell className="font-mono text-sm text-primary font-bold">#{c.id}</TableCell>
+                    <TableCell className="font-mono text-sm text-indigo-400 font-bold">
+                      PUB-{String(c.id).padStart(6, '0')}
+                    </TableCell>
                     <TableCell className="font-medium">{c.customer_name ?? '-'}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm font-mono" dir="ltr">{c.customer_phone ?? '-'}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">{c.type_name ?? '-'}</TableCell>
                     <TableCell>
                       <span className={`px-2 py-1 rounded-lg text-xs font-medium border ${
@@ -173,7 +152,7 @@ export default function Complaints() {
                         c.priority === 'متوسطة' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' :
                         'bg-green-500/10 text-green-500 border-green-500/20'
                       }`}>
-                        {c.priority ?? 'متوسطة'}
+                        {c.priority ?? 'عادية'}
                       </span>
                     </TableCell>
                     <TableCell>
@@ -200,7 +179,7 @@ export default function Complaints() {
 
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-6 py-4 border-t border-border/50">
-            <span className="text-sm text-muted-foreground">إجمالي {total} شكوى</span>
+            <span className="text-sm text-muted-foreground">إجمالي {total} شكوى من البوابة</span>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)} className="rounded-lg">السابق</Button>
               <span className="text-sm px-3 py-1 bg-muted rounded-lg">{page} / {totalPages}</span>

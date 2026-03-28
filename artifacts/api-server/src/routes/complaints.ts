@@ -26,7 +26,7 @@ router.get("/", requireAuth, async (req, res) => {
   try {
     const { page, limit } = parsePagination(req.query as Record<string, unknown>);
     const offset = (page - 1) * limit;
-    const { status, type_id, priority, assigned_to_id, customer_id, date_from, date_to } = req.query as Record<string, string>;
+    const { status, type_id, priority, assigned_to_id, customer_id, date_from, date_to, channel, search } = req.query as Record<string, string>;
 
     const conditions: ReturnType<typeof eq>[] = [];
     if (status) conditions.push(eq(complaintsTable.status, status));
@@ -36,6 +36,13 @@ router.get("/", requireAuth, async (req, res) => {
     if (customer_id) conditions.push(eq(complaintsTable.customer_id, parseInt(customer_id)));
     if (date_from) conditions.push(gte(complaintsTable.created_at, new Date(date_from)));
     if (date_to) conditions.push(lte(complaintsTable.created_at, new Date(date_to)));
+    if (channel) conditions.push(eq(complaintsTable.channel, channel));
+    if (search) {
+      const searchId = parseInt(search.replace(/[^0-9]/g, ''));
+      if (!isNaN(searchId) && searchId > 0) {
+        conditions.push(eq(complaintsTable.id, searchId));
+      }
+    }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 

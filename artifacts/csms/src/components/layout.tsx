@@ -123,6 +123,7 @@ function Sidebar() {
     { href: '/invoices', icon: FileText, label: t('nav.invoices') },
     { href: '/follow-ups', icon: PhoneCall, label: t('nav.followUps') },
     { href: '/complaints', icon: AlertTriangle, label: t('nav.complaints') },
+    { href: '/portal-complaints', icon: Globe, label: 'شكاوى البوابة' },
     { href: '/analytics', icon: BarChart3, label: t('nav.analytics') },
     ...(isManager ? [
       { href: '/branch-change-logs', icon: GitBranch, label: 'تغييرات الفروع' },

@@ -9,7 +9,7 @@ import {
   complaintsTable,
   customersTable,
 } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 
 const router = Router();
 
@@ -68,6 +68,50 @@ router.get("/complaint-types", async (req, res) => {
     res.json({ data: types });
   } catch (err) {
     req.log.error({ err }, "Public complaint types error");
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+router.get("/check-customer", async (req, res) => {
+  try {
+    const { phone } = req.query as { phone?: string };
+    if (!phone?.trim()) {
+      return res.json({ exists: false, complaints: [] });
+    }
+    const existing = await db
+      .select()
+      .from(customersTable)
+      .where(eq(customersTable.phone, phone.trim()))
+      .limit(1);
+
+    if (existing.length === 0) {
+      return res.json({ exists: false, complaints: [] });
+    }
+
+    const customer = existing[0];
+    const recentComplaints = await db
+      .select({
+        id: complaintsTable.id,
+        status: complaintsTable.status,
+        created_at: complaintsTable.created_at,
+      })
+      .from(complaintsTable)
+      .where(eq(complaintsTable.customer_id, customer.id))
+      .orderBy(desc(complaintsTable.created_at))
+      .limit(5);
+
+    return res.json({
+      exists: true,
+      customer_name: customer.name,
+      complaints: recentComplaints.map(c => ({
+        id: c.id,
+        reference_number: `PUB-${String(c.id).padStart(6, "0")}`,
+        status: c.status,
+        created_at: c.created_at,
+      })),
+    });
+  } catch (err) {
+    req.log.error({ err }, "Check customer error");
     res.status(500).json({ error: "Internal Server Error" });
   }
 });

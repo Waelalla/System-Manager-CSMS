@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -107,6 +107,12 @@ export default function PublicPortal() {
   const [dynamicFields, setDynamicFields] = useState<Record<string, string | number>>({});
   const [starRatings, setStarRatings] = useState<Record<string, number>>({});
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [duplicateInfo, setDuplicateInfo] = useState<{
+    customer_name: string;
+    complaints: { id: number; reference_number: string; status: string; created_at: string }[];
+  } | null>(null);
+  const [duplicateDismissed, setDuplicateDismissed] = useState(false);
+  const lastCheckedPhone = useRef<string>('');
 
   useEffect(() => {
     Promise.all([fetchPublicSettings(), fetchComplaintTypes()])
@@ -122,6 +128,29 @@ export default function PublicPortal() {
   const formFields: string[] = Array.isArray(settings?.public_form_fields) ? settings!.public_form_fields : ['name', 'phone', 'complaint_type', 'date'];
 
   const primaryColor = settings?.primary_color ?? '#6366f1';
+
+  const checkDuplicate = async (phone: string) => {
+    const trimmed = phone.trim();
+    if (!trimmed || trimmed === lastCheckedPhone.current) return;
+    lastCheckedPhone.current = trimmed;
+    try {
+      const res = await fetch(`${BASE}/api/public/check-customer?phone=${encodeURIComponent(trimmed)}`);
+      if (!res.ok) return;
+      const json = await res.json() as {
+        exists: boolean;
+        customer_name?: string;
+        complaints?: { id: number; reference_number: string; status: string; created_at: string }[];
+      };
+      if (json.exists && json.complaints && json.complaints.length > 0) {
+        setDuplicateInfo({ customer_name: json.customer_name ?? '', complaints: json.complaints });
+        setDuplicateDismissed(false);
+      } else {
+        setDuplicateInfo(null);
+      }
+    } catch {
+      // ignore
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -295,11 +324,54 @@ export default function PublicPortal() {
                     <Input
                       value={form.phone}
                       onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+                      onBlur={e => checkDuplicate(e.target.value)}
                       placeholder="01xxxxxxxxx"
                       dir="ltr"
                       className="h-12 rounded-xl text-white placeholder-gray-500"
                       style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}
                     />
+                    {duplicateInfo && !duplicateDismissed && (
+                      <div
+                        className="rounded-xl p-4 mt-2"
+                        style={{ background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.25)' }}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-start gap-2 flex-1">
+                            <AlertCircle className="w-4 h-4 text-yellow-400 mt-0.5 flex-shrink-0" />
+                            <div>
+                              <p className="text-yellow-300 text-sm font-semibold mb-1">
+                                رقم الهاتف مسجل بالفعل باسم: {duplicateInfo.customer_name}
+                              </p>
+                              <p className="text-yellow-400/80 text-xs mb-2">
+                                الشكاوى المسجلة لهذا الرقم:
+                              </p>
+                              <div className="space-y-1">
+                                {duplicateInfo.complaints.map(c => (
+                                  <div key={c.id} className="flex items-center gap-2 text-xs">
+                                    <span className="font-mono text-yellow-300 font-bold">{c.reference_number}</span>
+                                    <span className="text-yellow-400/60">—</span>
+                                    <span className="text-yellow-400/80">{c.status}</span>
+                                    <span className="text-yellow-400/50">
+                                      ({new Date(c.created_at).toLocaleDateString('ar-EG')})
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                              <p className="text-yellow-400/60 text-xs mt-2">
+                                يمكنك المتابعة وتقديم شكوى جديدة إذا كانت مختلفة عن الشكاوى السابقة.
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setDuplicateDismissed(true)}
+                            className="text-yellow-400/60 hover:text-yellow-400 flex-shrink-0"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 

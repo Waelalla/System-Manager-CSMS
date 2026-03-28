@@ -578,6 +578,8 @@ export type ListComplaintsParams = {
   customer_id?: number;
   date_from?: string;
   date_to?: string;
+  channel?: string;
+  search?: string;
 };
 
 export type ListFollowUpsParams = {

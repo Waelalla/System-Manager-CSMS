@@ -50,9 +50,10 @@ type EmployeeStat = {
 
 type EmployeeRange = 'all' | 'this_month' | 'last_month';
 
-function useGetEmployeeAnalytics(range: EmployeeRange) {
+function useGetEmployeeAnalytics(range: EmployeeRange, enabled: boolean) {
   return useQuery<{ employees: EmployeeStat[] }>({
     queryKey: ['/api/analytics/employees', range],
+    enabled,
     queryFn: async () => {
       const token = localStorage.getItem('access_token');
       const url = `${BASE}/api/analytics/employees${range !== 'all' ? `?range=${range}` : ''}`;
@@ -93,7 +94,7 @@ export default function Analytics() {
     user?.role_name === 'Manager/Voter' ||
     user?.role_name === 'Maintenance Engineer';
 
-  const { data: employeeData, isLoading: empLoading } = useGetEmployeeAnalytics(empRange);
+  const { data: employeeData, isLoading: empLoading } = useGetEmployeeAnalytics(empRange, canSeeEmployees);
 
   if (isLoading) {
     return (

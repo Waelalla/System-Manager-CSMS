@@ -208,30 +208,6 @@ router.get(
     try {
       const { range } = req.query as { range?: string };
 
-      let complaintDateWhere: ReturnType<typeof and> | ReturnType<typeof gte> | undefined;
-      let followUpDateWhere: ReturnType<typeof and> | ReturnType<typeof gte> | undefined;
-
-      if (range === "this_month") {
-        const thisMonthStart = sql`date_trunc('month', now())`;
-        complaintDateWhere = and(
-          gte(complaintsTable.created_at, thisMonthStart),
-          sql`${complaintsTable.created_by} is not null`
-        );
-        followUpDateWhere = gte(followUpsTable.created_at, thisMonthStart);
-      } else if (range === "last_month") {
-        const lastMonthStart = sql`date_trunc('month', now()) - interval '1 month'`;
-        const lastMonthEnd = sql`date_trunc('month', now())`;
-        complaintDateWhere = and(
-          gte(complaintsTable.created_at, lastMonthStart),
-          lte(complaintsTable.created_at, lastMonthEnd),
-          sql`${complaintsTable.created_by} is not null`
-        );
-        followUpDateWhere = and(
-          gte(followUpsTable.created_at, lastMonthStart),
-          lte(followUpsTable.created_at, lastMonthEnd)
-        );
-      }
-
       const allUsers = await db
         .select({
           id: usersTable.id,
@@ -246,25 +222,31 @@ router.get(
       const complaintsCreated = await db
         .select({ user_id: complaintsTable.created_by, count: count() })
         .from(complaintsTable)
-        .where(complaintDateWhere ?? sql`${complaintsTable.created_by} is not null`)
+        .where(
+          range === "this_month"
+            ? sql`${complaintsTable.created_by} is not null and ${complaintsTable.created_at} >= date_trunc('month', now())`
+            : range === "last_month"
+            ? sql`${complaintsTable.created_by} is not null and ${complaintsTable.created_at} >= date_trunc('month', now()) - interval '1 month' and ${complaintsTable.created_at} < date_trunc('month', now())`
+            : sql`${complaintsTable.created_by} is not null`
+        )
         .groupBy(complaintsTable.created_by);
-
-      const resolvedWhere = range === "this_month" || range === "last_month"
-        ? (complaintDateWhere
-            ? and(complaintDateWhere, sql`${complaintsTable.resolved_by} is not null`)
-            : sql`${complaintsTable.resolved_by} is not null`)
-        : sql`${complaintsTable.resolved_by} is not null`;
 
       const complaintsResolved = await db
         .select({ user_id: complaintsTable.resolved_by, count: count() })
         .from(complaintsTable)
-        .where(resolvedWhere)
+        .where(
+          range === "this_month"
+            ? sql`${complaintsTable.resolved_by} is not null and ${complaintsTable.resolved_at} >= date_trunc('month', now())`
+            : range === "last_month"
+            ? sql`${complaintsTable.resolved_by} is not null and ${complaintsTable.resolved_at} >= date_trunc('month', now()) - interval '1 month' and ${complaintsTable.resolved_at} < date_trunc('month', now())`
+            : sql`${complaintsTable.resolved_by} is not null and ${complaintsTable.resolved_at} is not null`
+        )
         .groupBy(complaintsTable.resolved_by);
 
       const complaintsAssigned = await db
         .select({ user_id: complaintsTable.assigned_to_id, count: count() })
         .from(complaintsTable)
-        .where(sql`${complaintsTable.assigned_to_id} is not null`)
+        .where(sql`${complaintsTable.assigned_to_id} is not null and ${complaintsTable.status} = ANY(ARRAY['جديدة','مستلمة','جاري المعالجة','مصعدة','تصعيد إداري']::text[])`)
         .groupBy(complaintsTable.assigned_to_id);
 
       const followUpsDone = await db
@@ -274,7 +256,13 @@ router.get(
           avg_rating: avg(followUpsTable.rating),
         })
         .from(followUpsTable)
-        .where(followUpDateWhere ?? sql`${followUpsTable.created_by} is not null`)
+        .where(
+          range === "this_month"
+            ? sql`${followUpsTable.created_by} is not null and ${followUpsTable.created_at} >= date_trunc('month', now())`
+            : range === "last_month"
+            ? sql`${followUpsTable.created_by} is not null and ${followUpsTable.created_at} >= date_trunc('month', now()) - interval '1 month' and ${followUpsTable.created_at} < date_trunc('month', now())`
+            : sql`${followUpsTable.created_by} is not null`
+        )
         .groupBy(followUpsTable.created_by);
 
       const createdMap = new Map(complaintsCreated.map((r) => [r.user_id, r.count]));
@@ -284,9 +272,12 @@ router.get(
         followUpsDone.map((r) => [r.user_id, { count: r.count, avg_rating: r.avg_rating }])
       );
 
-      const allResolved = complaintsResolved.reduce((sum, r) => sum + r.count, 0);
-      const allFollowUps = followUpsDone.reduce((sum, r) => sum + r.count, 0);
-      const maxScore = Math.max(allResolved * 2 + allFollowUps * 1, 1);
+      const rawScores = allUsers.map((user) => {
+        const resolved = resolvedMap.get(user.id) ?? 0;
+        const followUps = followUpMap.get(user.id)?.count ?? 0;
+        return resolved * 2 + followUps * 1;
+      });
+      const maxRawScore = Math.max(...rawScores, 1);
 
       const employees = allUsers.map((user) => {
         const complaints_created = createdMap.get(user.id) ?? 0;
@@ -300,7 +291,7 @@ router.get(
             : null;
 
         const rawScore = complaints_resolved * 2 + follow_ups_done * 1;
-        const performance_score = Math.min(100, Math.round((rawScore / maxScore) * 100));
+        const performance_score = Math.min(100, Math.round((rawScore / maxRawScore) * 100));
 
         return {
           id: user.id,

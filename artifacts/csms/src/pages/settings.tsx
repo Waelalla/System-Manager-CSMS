@@ -1,5 +1,6 @@
 import { useState, useRef, Fragment, useEffect } from 'react';
 import { useTranslation } from '@/lib/i18n';
+import { useAuth } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -166,6 +167,8 @@ const emptyUserForm: UserForm = { name: '', email: '', password: '', role_id: ''
 
 export default function Settings() {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const isManager = user?.role_name === 'Manager';
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [section, setSection] = useState<Section>('company');
@@ -666,7 +669,7 @@ export default function Settings() {
     { id: 'company' as Section, label: 'معلومات الشركة', icon: Building2 },
     { id: 'portal' as Section, label: 'بوابة الشكاوى العامة', icon: Globe },
     { id: 'users' as Section, label: 'إدارة المستخدمين', icon: Users },
-    { id: 'roles' as Section, label: 'صلاحيات الأدوار', icon: Shield },
+    ...(isManager ? [{ id: 'roles' as Section, label: 'صلاحيات الأدوار', icon: Shield }] : []),
     { id: 'types' as Section, label: 'أنواع الشكاوى', icon: Tags },
     { id: 'products' as Section, label: 'المنتجات', icon: Package },
     { id: 'branches' as Section, label: 'الفروع', icon: GitBranch },
@@ -1788,7 +1791,7 @@ export default function Settings() {
               </div>
             )}
 
-            {section === 'roles' && (() => {
+            {section === 'roles' && isManager && (() => {
               const allRoles = (rolesData as unknown as { data?: { id: number; name: string; permissions: string[] }[] })?.data ?? [];
               const editableRoles = allRoles.filter(r => !LOCKED_ROLE_NAMES.includes(r.name));
               const lockedRoles = allRoles.filter(r => LOCKED_ROLE_NAMES.includes(r.name));

@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { rolesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth.js";
+import { PERMISSIONS, LOCKED_ROLES } from "../lib/permissions.js";
 
 const router = Router();
 
@@ -44,12 +45,31 @@ router.put("/:id", requireAuth, requireRole("Manager"), async (req, res) => {
   try {
     const id = parseInt(req.params.id as string);
     const { name, permissions } = req.body;
+
+    const [existing] = await db.select().from(rolesTable).where(eq(rolesTable.id, id)).limit(1);
+    if (!existing) { res.status(404).json({ error: "Not Found" }); return; }
+
     const updates: Record<string, unknown> = {};
     if (name) updates.name = name;
-    if (permissions !== undefined) updates.permissions = permissions;
+
+    if (permissions !== undefined) {
+      if (LOCKED_ROLES.includes(existing.name)) {
+        updates.permissions = ["*"];
+      } else {
+        if (!Array.isArray(permissions)) {
+          res.status(400).json({ error: "permissions must be an array" }); return;
+        }
+        const validPerms = PERMISSIONS as readonly string[];
+        const invalid = (permissions as string[]).filter(p => !validPerms.includes(p));
+        if (invalid.length > 0) {
+          res.status(400).json({ error: `Unknown permissions: ${invalid.join(", ")}` }); return;
+        }
+        updates.permissions = permissions;
+      }
+    }
+
     await db.update(rolesTable).set(updates).where(eq(rolesTable.id, id));
     const [role] = await db.select().from(rolesTable).where(eq(rolesTable.id, id)).limit(1);
-    if (!role) { res.status(404).json({ error: "Not Found" }); return; }
     res.json(role);
   } catch (err) {
     req.log.error({ err }, "Update role error");

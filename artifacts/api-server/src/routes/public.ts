@@ -121,14 +121,15 @@ router.post("/complaints", upload.single("file"), async (req, res) => {
     }
 
     const typeFields = Array.isArray(type.fields)
-      ? (type.fields as { key: string; label: string; type: string; required?: boolean }[])
+      ? (type.fields as { name: string; key?: string; label: string; type: string; required?: boolean }[])
       : [];
     const missingFields: string[] = [];
     for (const field of typeFields) {
       if (field.required) {
-        const val = fieldsValues[field.key];
+        const fieldKey = field.name ?? field.key ?? "";
+        const val = fieldsValues[fieldKey];
         if (val === undefined || val === null || String(val).trim() === "") {
-          missingFields.push(field.label ?? field.key);
+          missingFields.push(field.label ?? fieldKey);
         }
       }
     }

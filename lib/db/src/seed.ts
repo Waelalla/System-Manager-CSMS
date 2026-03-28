@@ -43,17 +43,17 @@ async function seed() {
   }
 
   const PRODUCTS = [
-    { name: "غسالة أوتوماتيك", category: "أجهزة كهربائية" },
-    { name: "ثلاجة", category: "أجهزة كهربائية" },
-    { name: "تكييف", category: "أجهزة تكييف" },
-    { name: "بوتاجاز", category: "أجهزة منزلية" },
-    { name: "شاشة تلفزيون", category: "أجهزة إلكترونية" },
+    { name: "غسالة أوتوماتيك", code: "WASH-001", category: "أجهزة كهربائية" },
+    { name: "ثلاجة", code: "FRIDGE-001", category: "أجهزة كهربائية" },
+    { name: "تكييف", code: "AC-001", category: "أجهزة تكييف" },
+    { name: "بوتاجاز", code: "STOVE-001", category: "أجهزة منزلية" },
+    { name: "شاشة تلفزيون", code: "TV-001", category: "أجهزة إلكترونية" },
   ];
   for (const product of PRODUCTS) {
     const existing = await db.select().from(productsTable).where(eq(productsTable.name, product.name)).limit(1);
     if (existing.length === 0) {
-      await db.insert(productsTable).values({ name: product.name, category: product.category, attributes: null });
-      console.log(`  ✓ Created product: ${product.name}`);
+      await db.insert(productsTable).values({ name: product.name, code: product.code, category: product.category, attributes: null });
+      console.log(`  ✓ Created product: ${product.name} (${product.code})`);
     } else {
       console.log(`  - Product exists: ${product.name}`);
     }

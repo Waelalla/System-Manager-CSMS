@@ -22,10 +22,32 @@ router.get("/", requireAuth, async (req, res) => {
 
 router.post("/", requireAuth, requireRole("Manager/Voter", "Manager"), async (req, res) => {
   try {
-    const { name, category, attributes } = req.body;
-    if (!name || !category) { res.status(400).json({ error: "name and category are required" }); return; }
-    const [product] = await db.insert(productsTable).values({ name, category, attributes }).returning();
-    res.status(201).json(product);
+    const { name, code, category, attributes } = req.body;
+    if (!name || typeof name !== "string" || !name.trim()) {
+      res.status(400).json({ error: "name is required" });
+      return;
+    }
+    const productCode = (code ?? category ?? "").trim();
+    if (!productCode) {
+      res.status(400).json({ error: "code is required" });
+      return;
+    }
+    try {
+      const [product] = await db.insert(productsTable).values({
+        name: name.trim(),
+        code: productCode,
+        category: productCode,
+        attributes: attributes ?? null,
+      }).returning();
+      res.status(201).json(product);
+    } catch (dbErr: unknown) {
+      const err = dbErr as { code?: string };
+      if (err?.code === "23505") {
+        res.status(409).json({ error: "كود المنتج مستخدم بالفعل، يرجى اختيار كود آخر" });
+        return;
+      }
+      throw dbErr;
+    }
   } catch (err) {
     req.log.error({ err }, "Create product error");
     res.status(500).json({ error: "Internal Server Error" });
@@ -35,12 +57,26 @@ router.post("/", requireAuth, requireRole("Manager/Voter", "Manager"), async (re
 router.put("/:id", requireAuth, requireRole("Manager/Voter", "Manager"), async (req, res) => {
   try {
     const id = parseInt(req.params.id as string);
-    const { name, category, attributes } = req.body;
+    const { name, code, category, attributes } = req.body;
     const updates: Record<string, unknown> = {};
-    if (name) updates.name = name;
-    if (category) updates.category = category;
+    if (name && typeof name === "string" && name.trim()) updates.name = name.trim();
+    const newCode = (code ?? category ?? "").trim();
+    if (newCode) { updates.code = newCode; updates.category = newCode; }
     if (attributes !== undefined) updates.attributes = attributes;
-    await db.update(productsTable).set(updates).where(eq(productsTable.id, id));
+    if (Object.keys(updates).length === 0) {
+      res.status(400).json({ error: "No valid fields to update" });
+      return;
+    }
+    try {
+      await db.update(productsTable).set(updates).where(eq(productsTable.id, id));
+    } catch (dbErr: unknown) {
+      const err = dbErr as { code?: string };
+      if (err?.code === "23505") {
+        res.status(409).json({ error: "كود المنتج مستخدم بالفعل، يرجى اختيار كود آخر" });
+        return;
+      }
+      throw dbErr;
+    }
     const [product] = await db.select().from(productsTable).where(eq(productsTable.id, id)).limit(1);
     if (!product) { res.status(404).json({ error: "Not Found" }); return; }
     res.json(product);

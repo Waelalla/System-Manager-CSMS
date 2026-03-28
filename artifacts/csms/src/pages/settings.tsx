@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import {
   Save, Building2, Users, Tags, GitBranch, Upload,
   CheckCircle2, AlertCircle, Mail, Star, Palette, Shield,
-  Plus, Trash2, MapPin, Pencil, X, Eye, EyeOff, Globe,
+  Plus, Trash2, MapPin, Pencil, X, Eye, EyeOff, Globe, Package,
 } from 'lucide-react';
 import {
   useGetSettings, useUpsertSettings,
@@ -15,6 +15,7 @@ import {
   useCreateBranch, useDeleteBranch,
   useCreateUser, useUpdateUser, useDeleteUser,
   useListRoles,
+  useListProducts, useCreateProduct, useUpdateProduct, useDeleteProduct,
   ComplaintTypeFieldType,
 } from '@workspace/api-client-react';
 import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
@@ -67,7 +68,7 @@ function useDeleteRatingQuestion() {
   });
 }
 
-type Section = 'company' | 'users' | 'types' | 'branches' | 'import' | 'email' | 'points' | 'appearance' | 'security' | 'rating' | 'portal';
+type Section = 'company' | 'users' | 'types' | 'branches' | 'import' | 'email' | 'points' | 'appearance' | 'security' | 'rating' | 'portal' | 'products';
 
 interface ImportResult {
   added_customers?: number;
@@ -112,6 +113,61 @@ export default function Settings() {
   const { mutateAsync: createUser } = useCreateUser();
   const { mutateAsync: updateUser } = useUpdateUser();
   const { mutateAsync: deleteUser } = useDeleteUser();
+
+  const { data: productsData, refetch: refetchProducts } = useListProducts(undefined, { query: { queryKey: ['listProducts'] } });
+  const { mutateAsync: createProduct } = useCreateProduct();
+  const { mutateAsync: updateProduct } = useUpdateProduct();
+  const { mutateAsync: deleteProduct } = useDeleteProduct();
+
+  const [showProductForm, setShowProductForm] = useState(false);
+  const [productFormMode, setProductFormMode] = useState<'add' | 'edit'>('add');
+  const [editingProductId, setEditingProductId] = useState<number | null>(null);
+  const [productFormData, setProductFormData] = useState({ name: '', code: '' });
+  const [savingProduct, setSavingProduct] = useState(false);
+
+  const openAddProductForm = () => {
+    setProductFormMode('add');
+    setEditingProductId(null);
+    setProductFormData({ name: '', code: '' });
+    setShowProductForm(true);
+  };
+
+  const openEditProductForm = (p: { id: number; name: string; code?: string; category?: string }) => {
+    setProductFormMode('edit');
+    setEditingProductId(p.id);
+    setProductFormData({ name: p.name, code: p.code ?? p.category ?? '' });
+    setShowProductForm(true);
+  };
+
+  const handleSaveProduct = async () => {
+    if (!productFormData.name.trim() || !productFormData.code.trim()) return;
+    setSavingProduct(true);
+    try {
+      if (productFormMode === 'add') {
+        await createProduct({ data: { name: productFormData.name.trim(), category: productFormData.code.trim() } });
+        toast({ title: 'تم الإضافة', description: `تم إضافة المنتج "${productFormData.name}"` });
+      } else if (editingProductId) {
+        await updateProduct({ id: editingProductId, data: { name: productFormData.name.trim(), category: productFormData.code.trim() } });
+        toast({ title: 'تم التعديل', description: `تم تحديث المنتج "${productFormData.name}"` });
+      }
+      queryClient.invalidateQueries({ queryKey: ['listProducts'] });
+      refetchProducts();
+      setShowProductForm(false);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'فشل في الحفظ';
+      toast({ title: 'خطأ', description: msg, variant: 'destructive' });
+    } finally { setSavingProduct(false); }
+  };
+
+  const handleDeleteProduct = async (id: number, name: string) => {
+    if (!confirm(`هل أنت متأكد من حذف المنتج "${name}"؟`)) return;
+    try {
+      await deleteProduct({ id });
+      queryClient.invalidateQueries({ queryKey: ['listProducts'] });
+      refetchProducts();
+      toast({ title: 'تم الحذف' });
+    } catch { toast({ title: 'خطأ', description: 'فشل في الحذف', variant: 'destructive' }); }
+  };
 
   const { data: ratingQuestions, isLoading: loadingRQ } = useRatingQuestions();
   const { mutateAsync: createRatingQ, isPending: addingRQ } = useCreateRatingQuestion();
@@ -382,6 +438,50 @@ export default function Settings() {
     }
   };
 
+  function hexToHsl(hex: string): string {
+    const r = parseInt(hex.slice(1, 3), 16) / 255;
+    const g = parseInt(hex.slice(3, 5), 16) / 255;
+    const b = parseInt(hex.slice(5, 7), 16) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0, s = 0;
+    const l = (max + min) / 2;
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch (max) {
+        case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+        case g: h = ((b - r) / d + 2) / 6; break;
+        case b: h = ((r - g) / d + 4) / 6; break;
+      }
+    }
+    return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
+  }
+
+  const handleSaveAppearance = async () => {
+    try {
+      await upsert({ data: { settings: { ...form } } });
+      queryClient.invalidateQueries({ queryKey: ['/api/settings'] });
+      const root = document.documentElement;
+      const accentColor = form.accent_color;
+      if (accentColor && /^#[0-9a-fA-F]{6}$/.test(accentColor)) {
+        const hsl = hexToHsl(accentColor);
+        root.style.setProperty('--primary', hsl);
+        root.style.setProperty('--accent', hsl);
+        root.style.setProperty('--ring', hsl);
+      }
+      if (form.theme === 'light') {
+        root.classList.remove('dark');
+        root.classList.add('light');
+      } else {
+        root.classList.remove('light');
+        root.classList.add('dark');
+      }
+      toast({ title: 'تم الحفظ', description: 'تم تطبيق إعدادات المظهر بنجاح' });
+    } catch {
+      toast({ title: 'خطأ', description: 'فشل في حفظ الإعدادات', variant: 'destructive' });
+    }
+  };
+
   const PUBLIC_FORM_FIELDS_OPTIONS = [
     { id: 'name', label: 'الاسم الكامل', required: true },
     { id: 'phone', label: 'رقم الهاتف', required: false },
@@ -486,6 +586,7 @@ export default function Settings() {
     { id: 'portal' as Section, label: 'بوابة الشكاوى العامة', icon: Globe },
     { id: 'users' as Section, label: 'إدارة المستخدمين', icon: Users },
     { id: 'types' as Section, label: 'أنواع الشكاوى', icon: Tags },
+    { id: 'products' as Section, label: 'المنتجات', icon: Package },
     { id: 'branches' as Section, label: 'الفروع', icon: GitBranch },
     { id: 'rating' as Section, label: 'أسئلة التقييم', icon: Star },
     { id: 'email' as Section, label: 'البريد الإلكتروني', icon: Mail },
@@ -498,6 +599,7 @@ export default function Settings() {
   const users = usersData?.data ?? [];
   const types = typesData?.data ?? [];
   const branches = branchesData?.data ?? [];
+  const products = productsData?.data ?? [];
 
   return (
     <div className="space-y-6">
@@ -1079,6 +1181,112 @@ export default function Settings() {
               </div>
             )}
 
+            {section === 'products' && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-bold flex items-center gap-2"><Package className="w-5 h-5 text-primary" /> المنتجات</h2>
+                    <p className="text-sm text-muted-foreground mt-0.5">{products.length} منتج مسجّل</p>
+                  </div>
+                  <Button
+                    onClick={() => {
+                      if (showProductForm && productFormMode === 'add') {
+                        setShowProductForm(false);
+                      } else {
+                        openAddProductForm();
+                      }
+                    }}
+                    className="rounded-xl h-10 bg-primary hover:bg-primary/90 text-white gap-2"
+                  >
+                    {showProductForm && productFormMode === 'add' ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                    {showProductForm && productFormMode === 'add' ? 'إلغاء' : 'إضافة منتج'}
+                  </Button>
+                </div>
+
+                {showProductForm && (
+                  <div className="bg-muted/20 rounded-xl p-5 border border-primary/20 space-y-4">
+                    <p className="text-sm font-semibold text-primary flex items-center gap-2">
+                      {productFormMode === 'add' ? <Plus className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
+                      {productFormMode === 'add' ? 'إضافة منتج جديد' : `تعديل: ${productFormData.name}`}
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">اسم المنتج *</label>
+                        <Input
+                          value={productFormData.name}
+                          onChange={e => setProductFormData(f => ({ ...f, name: e.target.value }))}
+                          placeholder="مثال: تكييف سبليت"
+                          className="h-10 bg-background/60 rounded-xl"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">الكود المختصر *</label>
+                        <Input
+                          value={productFormData.code}
+                          onChange={e => setProductFormData(f => ({ ...f, code: e.target.value }))}
+                          placeholder="مثال: AC-SPLIT"
+                          dir="ltr"
+                          className="h-10 bg-background/60 rounded-xl font-mono"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <Button
+                        onClick={handleSaveProduct}
+                        disabled={!productFormData.name.trim() || !productFormData.code.trim() || savingProduct}
+                        className="rounded-xl h-10 bg-primary hover:bg-primary/90 text-white px-6 gap-2"
+                      >
+                        <Save className="w-4 h-4" /> {savingProduct ? 'جاري الحفظ...' : (productFormMode === 'add' ? 'إضافة المنتج' : 'حفظ التعديلات')}
+                      </Button>
+                      <Button variant="outline" onClick={() => setShowProductForm(false)} className="rounded-xl h-10 px-4">إلغاء</Button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="rounded-xl border border-border/50 overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/30">
+                      <tr>
+                        <th className="text-right p-3 font-medium">اسم المنتج</th>
+                        <th className="text-right p-3 font-medium">الكود</th>
+                        <th className="text-left p-3 font-medium w-24">إجراءات</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/30">
+                      {products.length === 0 ? (
+                        <tr><td colSpan={3} className="p-8 text-center text-muted-foreground text-sm">لا توجد منتجات — اضغط "إضافة منتج" للبدء</td></tr>
+                      ) : (products as { id: number; name: string; code?: string; category?: string }[]).map(p => (
+                        <tr key={p.id} className="hover:bg-muted/20 transition-colors">
+                          <td className="p-3 font-medium">{p.name}</td>
+                          <td className="p-3">
+                            <span className="px-2 py-0.5 rounded-lg text-xs bg-muted/40 text-muted-foreground font-mono">{p.code ?? p.category ?? '-'}</span>
+                          </td>
+                          <td className="p-3">
+                            <div className="flex gap-1 justify-end">
+                              <button
+                                onClick={() => { openEditProductForm(p); }}
+                                className="p-1.5 rounded-lg hover:bg-primary/10 text-primary transition-colors"
+                                title="تعديل"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteProduct(p.id, p.name)}
+                                className="p-1.5 rounded-lg hover:bg-red-500/10 text-red-400 transition-colors"
+                                title="حذف"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
             {section === 'branches' && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
@@ -1344,8 +1552,8 @@ export default function Settings() {
                   </div>
                 </div>
                 <div className="pt-4 border-t border-border/50 flex justify-end">
-                  <Button onClick={() => handleSave()} className="rounded-xl bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 h-12 px-8">
-                    <Save className="w-4 h-4 mr-2" /> حفظ التغييرات
+                  <Button onClick={handleSaveAppearance} className="rounded-xl bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 h-12 px-8">
+                    <Save className="w-4 h-4 mr-2" /> حفظ وتطبيق التغييرات
                   </Button>
                 </div>
               </div>

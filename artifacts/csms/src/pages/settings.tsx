@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import {
   Save, Building2, Users, Tags, GitBranch, Upload,
   CheckCircle2, AlertCircle, Mail, Star, Palette, Shield,
-  Plus, Trash2, MapPin, Pencil, X, Eye, EyeOff,
+  Plus, Trash2, MapPin, Pencil, X, Eye, EyeOff, Globe,
 } from 'lucide-react';
 import {
   useGetSettings, useUpsertSettings,
@@ -67,7 +67,7 @@ function useDeleteRatingQuestion() {
   });
 }
 
-type Section = 'company' | 'users' | 'types' | 'branches' | 'import' | 'email' | 'points' | 'appearance' | 'security' | 'rating';
+type Section = 'company' | 'users' | 'types' | 'branches' | 'import' | 'email' | 'points' | 'appearance' | 'security' | 'rating' | 'portal';
 
 interface ImportResult {
   added_customers?: number;
@@ -160,6 +160,19 @@ export default function Settings() {
   const [editUserPwdVisible, setEditUserPwdVisible] = useState(false);
   const [savingUser, setSavingUser] = useState(false);
   const [addingBranch, setAddingBranch] = useState(false);
+
+  const [portalForm, setPortalForm] = useState({
+    primary_color: String(settings.primary_color ?? '#6366f1'),
+    company_logo: String(settings.company_logo ?? ''),
+    public_form_fields: Array.isArray(settings.public_form_fields)
+      ? (settings.public_form_fields as string[])
+      : ['name', 'phone', 'complaint_type', 'date'],
+  });
+  const [portalLogoUploading, setPortalLogoUploading] = useState(false);
+  const portalLogoRef = useRef<HTMLInputElement>(null);
+
+  const [typeSuccessMessages, setTypeSuccessMessages] = useState<Record<number, string>>({});
+  const [savingSuccessMsg, setSavingSuccessMsg] = useState<Record<number, boolean>>({});
 
   const openAddTypeForm = () => {
     setTypeFormMode('add');
@@ -343,6 +356,79 @@ export default function Settings() {
     }
   };
 
+  const PUBLIC_FORM_FIELDS_OPTIONS = [
+    { id: 'name', label: 'الاسم الكامل', required: true },
+    { id: 'phone', label: 'رقم الهاتف', required: false },
+    { id: 'email', label: 'البريد الإلكتروني', required: false },
+    { id: 'national_id', label: 'الرقم القومي', required: false },
+    { id: 'governorate', label: 'المحافظة', required: false },
+    { id: 'address', label: 'العنوان', required: false },
+    { id: 'complaint_type', label: 'نوع الشكوى', required: true },
+    { id: 'date', label: 'تاريخ الحادثة', required: false },
+  ];
+
+  const handleSavePortal = async () => {
+    try {
+      await upsert({
+        data: {
+          settings: {
+            primary_color: portalForm.primary_color,
+            company_logo: portalForm.company_logo,
+            public_form_fields: portalForm.public_form_fields as unknown as string,
+          },
+        },
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/settings'] });
+      toast({ title: 'تم الحفظ', description: 'تم حفظ إعدادات البوابة بنجاح' });
+    } catch {
+      toast({ title: 'خطأ', description: 'فشل في حفظ إعدادات البوابة', variant: 'destructive' });
+    }
+  };
+
+  const handlePortalLogoUpload = async (file: File) => {
+    setPortalLogoUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+    const token = localStorage.getItem('access_token');
+    try {
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const json = await res.json() as { url?: string; path?: string; error?: string };
+      if (!res.ok) throw new Error(json.error ?? 'فشل رفع الصورة');
+      const url = json.url ?? json.path ?? '';
+      setPortalForm(f => ({ ...f, company_logo: url }));
+      toast({ title: 'تم رفع الشعار', description: 'تم رفع الشعار بنجاح، اضغط "حفظ" لتأكيد التغييرات' });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'فشل الرفع';
+      toast({ title: 'خطأ', description: msg, variant: 'destructive' });
+    } finally {
+      setPortalLogoUploading(false);
+      if (portalLogoRef.current) portalLogoRef.current.value = '';
+    }
+  };
+
+  const handleSaveSuccessMessage = async (typeId: number) => {
+    setSavingSuccessMsg(p => ({ ...p, [typeId]: true }));
+    const token = localStorage.getItem('access_token');
+    try {
+      const res = await fetch(`/api/complaint-types/${typeId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ success_message: typeSuccessMessages[typeId] ?? null }),
+      });
+      if (!res.ok) throw new Error('فشل الحفظ');
+      queryClient.invalidateQueries({ queryKey: ['listComplaintTypes'] });
+      toast({ title: 'تم الحفظ', description: 'تم حفظ رسالة النجاح' });
+    } catch {
+      toast({ title: 'خطأ', description: 'فشل في حفظ الرسالة', variant: 'destructive' });
+    } finally {
+      setSavingSuccessMsg(p => ({ ...p, [typeId]: false }));
+    }
+  };
+
   const handleFileUpload = async (file: File) => {
     setUploading(true);
     setImportResult(null);
@@ -371,6 +457,7 @@ export default function Settings() {
 
   const navItems = [
     { id: 'company' as Section, label: 'معلومات الشركة', icon: Building2 },
+    { id: 'portal' as Section, label: 'بوابة الشكاوى العامة', icon: Globe },
     { id: 'users' as Section, label: 'إدارة المستخدمين', icon: Users },
     { id: 'types' as Section, label: 'أنواع الشكاوى', icon: Tags },
     { id: 'branches' as Section, label: 'الفروع', icon: GitBranch },
@@ -462,6 +549,150 @@ export default function Settings() {
                   <Button onClick={() => handleSave()} className="rounded-xl bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 h-12 px-8">
                     <Save className="w-4 h-4 mr-2" /> حفظ التغييرات
                   </Button>
+                </div>
+              </div>
+            )}
+
+            {section === 'portal' && (
+              <div className="space-y-8">
+                <div>
+                  <h2 className="text-xl font-bold flex items-center gap-2"><Globe className="w-5 h-5 text-primary" /> بوابة الشكاوى العامة</h2>
+                  <p className="text-sm text-muted-foreground mt-1">تخصيص مظهر وسلوك بوابة تقديم الشكاوى للعملاء (لا تتطلب تسجيل دخول)</p>
+                </div>
+
+                <div className="space-y-5 border border-border/50 rounded-2xl p-5">
+                  <h3 className="text-base font-semibold">الهوية البصرية للبوابة</h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">اللون الرئيسي للبوابة</label>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="color"
+                          value={portalForm.primary_color}
+                          onChange={e => setPortalForm(f => ({ ...f, primary_color: e.target.value }))}
+                          className="w-12 h-12 rounded-xl border border-input cursor-pointer"
+                        />
+                        <Input
+                          value={portalForm.primary_color}
+                          onChange={e => setPortalForm(f => ({ ...f, primary_color: e.target.value }))}
+                          dir="ltr"
+                          className="h-12 bg-background/50 rounded-xl font-mono"
+                          placeholder="#6366f1"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">شعار الشركة (Logo)</label>
+                      {portalForm.company_logo ? (
+                        <div className="flex items-center gap-3">
+                          <img src={portalForm.company_logo} alt="شعار" className="h-12 w-auto object-contain rounded-lg border border-border/40" />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setPortalForm(f => ({ ...f, company_logo: '' }))}
+                            className="rounded-xl text-xs text-red-400 border-red-400/30 hover:bg-red-400/10"
+                          >
+                            <X className="w-3 h-3 mr-1" /> إزالة
+                          </Button>
+                        </div>
+                      ) : (
+                        <label className="flex items-center gap-2 h-12 border border-dashed border-input rounded-xl px-4 cursor-pointer hover:bg-muted/20 transition-colors">
+                          <Upload className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-sm text-muted-foreground">
+                            {portalLogoUploading ? 'جاري الرفع...' : 'ارفع شعار الشركة (PNG/JPG)'}
+                          </span>
+                          <input
+                            ref={portalLogoRef}
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={e => { const f = e.target.files?.[0]; if (f) handlePortalLogoUpload(f); }}
+                          />
+                        </label>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">اسم الشركة (يُعرض في رأس البوابة)</label>
+                    <p className="text-xs text-muted-foreground">يُحدَّث من قسم "معلومات الشركة" → "اسم الشركة"</p>
+                    <div
+                      className="h-10 rounded-xl px-3 flex items-center text-sm text-muted-foreground border border-border/30"
+                      style={{ background: 'rgba(255,255,255,0.03)' }}
+                    >
+                      {String(settings.company_name ?? 'نظام إدارة خدمة العملاء')}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4 border border-border/50 rounded-2xl p-5">
+                  <h3 className="text-base font-semibold">حقول نموذج الشكوى العامة</h3>
+                  <p className="text-xs text-muted-foreground">اختر الحقول التي ستظهر في نموذج تقديم الشكوى للعملاء</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {PUBLIC_FORM_FIELDS_OPTIONS.map(field => {
+                      const checked = portalForm.public_form_fields.includes(field.id);
+                      return (
+                        <label
+                          key={field.id}
+                          className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                            checked ? 'border-primary/30 bg-primary/5' : 'border-border/40 hover:bg-muted/20'
+                          } ${field.required ? 'opacity-90' : ''}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={field.required}
+                            onChange={e => {
+                              if (e.target.checked) {
+                                setPortalForm(f => ({ ...f, public_form_fields: [...f.public_form_fields, field.id] }));
+                              } else {
+                                setPortalForm(f => ({ ...f, public_form_fields: f.public_form_fields.filter(x => x !== field.id) }));
+                              }
+                            }}
+                            className="accent-primary w-4 h-4"
+                          />
+                          <span className="text-sm">{field.label}</span>
+                          {field.required && <span className="text-xs text-muted-foreground mr-auto">(إلزامي)</span>}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="pt-4 flex justify-end">
+                  <Button onClick={handleSavePortal} className="rounded-xl bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 h-12 px-8">
+                    <Save className="w-4 h-4 mr-2" /> حفظ إعدادات البوابة
+                  </Button>
+                </div>
+
+                <div className="space-y-4 border border-border/50 rounded-2xl p-5">
+                  <h3 className="text-base font-semibold">رسائل النجاح لكل نوع شكوى</h3>
+                  <p className="text-xs text-muted-foreground">هذه الرسالة ستظهر للعميل بعد إرسال الشكوى بنجاح</p>
+                  {types.length === 0 && <p className="text-sm text-muted-foreground py-4 text-center">لا توجد أنواع شكاوى — أضف أنواعاً من قسم "أنواع الشكاوى"</p>}
+                  <div className="space-y-3">
+                    {(types as { id: number; name: string; success_message?: string }[]).map(tp => (
+                      <div key={tp.id} className="border border-border/30 rounded-xl p-4 space-y-2">
+                        <p className="text-sm font-medium text-primary">{tp.name}</p>
+                        <textarea
+                          value={typeSuccessMessages[tp.id] !== undefined ? typeSuccessMessages[tp.id] : (tp.success_message ?? '')}
+                          onChange={e => setTypeSuccessMessages(p => ({ ...p, [tp.id]: e.target.value }))}
+                          rows={2}
+                          placeholder="شكراً لتواصلك معنا، سنعود إليك في أقرب وقت..."
+                          className="w-full bg-background/50 border border-input rounded-xl px-3 py-2 text-sm resize-none"
+                        />
+                        <Button
+                          onClick={() => handleSaveSuccessMessage(tp.id)}
+                          disabled={savingSuccessMsg[tp.id]}
+                          size="sm"
+                          className="rounded-xl h-8 text-xs bg-primary/10 hover:bg-primary/20 text-primary px-4"
+                        >
+                          <Save className="w-3 h-3 mr-1" /> {savingSuccessMsg[tp.id] ? 'جاري الحفظ...' : 'حفظ الرسالة'}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}

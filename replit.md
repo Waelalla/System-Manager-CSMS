@@ -54,7 +54,7 @@ artifacts-monorepo/
 - `products` — product catalog with categories
 - `customers` — customer profiles with code generation (CUST-YYYYMMDD-XXXX)
 - `invoices` — invoice records linked to customers and products
-- `complaint_types` — dynamic complaint types with custom fields
+- `complaint_types` — dynamic complaint types with custom fields + `success_message` (shown after public portal submission)
 - `complaints` — complaints with status lifecycle: جديدة → مستلمة → قيد الحل → محلول → مغلق
 - `complaint_logs` — audit trail for every complaint action
 - `feedback` — customer satisfaction ratings
@@ -64,8 +64,14 @@ artifacts-monorepo/
 - `settings` — key-value system settings
 - `notifications` — polling-based notifications per user
 
-## API Routes (all under /api prefix, JWT required except /auth/login)
+## API Routes (all under /api prefix, JWT required except /auth/login and /public/*)
 
+### Public routes (no auth)
+- `GET /api/public/settings` — returns company_name, company_logo, primary_color, public_form_fields
+- `GET /api/public/complaint-types` — returns active types with fields + success_message
+- `POST /api/public/complaints` — creates guest complaint, returns reference number (PUB-XXXXXX)
+
+### Authenticated routes
 - `POST /api/auth/login` — returns access_token + refresh_token + user
 - `POST /api/auth/refresh` — refresh token
 - `GET /api/auth/profile` — current user profile
@@ -94,8 +100,9 @@ artifacts-monorepo/
 
 ## Frontend Pages
 
-- `/login` — Auth page (pre-filled with default credentials)
-- `/` — Dashboard with KPI cards and trend chart
+- `/` — **Public complaint portal** (no auth required) — branded form for guest complaint submission
+- `/login` — Staff auth page (pre-filled with default credentials); subtle "الإدارة" link from portal
+- `/dashboard` — Dashboard with KPI cards and trend chart
 - `/customers` — Customer management with search, pagination, add dialog
 - `/complaints` — Complaints list with status badges
 - `/complaints/:id` — Complaint detail with logs and actions

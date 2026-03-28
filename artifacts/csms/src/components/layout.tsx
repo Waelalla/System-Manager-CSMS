@@ -118,7 +118,7 @@ function Sidebar() {
   const isManager = role === 'Manager' || role === 'Manager/Voter';
 
   const links = [
-    { href: '/', icon: LayoutDashboard, label: t('nav.dashboard') },
+    { href: '/dashboard', icon: LayoutDashboard, label: t('nav.dashboard') },
     { href: '/customers', icon: Users, label: t('nav.customers') },
     { href: '/invoices', icon: FileText, label: t('nav.invoices') },
     { href: '/follow-ups', icon: PhoneCall, label: t('nav.followUps') },
@@ -145,7 +145,7 @@ function Sidebar() {
       
       <nav className="flex-1 px-4 space-y-1 overflow-y-auto">
         {links.map((link) => {
-          const isActive = location === link.href || (link.href !== '/' && location.startsWith(link.href));
+          const isActive = location === link.href || (link.href !== '/dashboard' && location.startsWith(link.href));
           return (
             <Link key={link.href} href={link.href} className={`
               flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200

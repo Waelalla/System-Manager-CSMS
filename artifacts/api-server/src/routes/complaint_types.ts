@@ -37,13 +37,14 @@ router.post("/", requireAuth, requireRole("Manager/Voter", "Manager"), async (re
 router.put("/:id", requireAuth, requireRole("Manager/Voter", "Manager"), async (req, res) => {
   try {
     const id = parseInt(req.params.id as string);
-    const { name, description, category, is_active, fields } = req.body;
+    const { name, description, category, is_active, fields, success_message } = req.body;
     const updates: Record<string, unknown> = {};
     if (name) updates.name = name;
     if (description !== undefined) updates.description = description;
     if (category !== undefined) updates.category = category;
     if (is_active !== undefined) updates.is_active = is_active;
     if (fields !== undefined) updates.fields = fields;
+    if (success_message !== undefined) updates.success_message = success_message || null;
     await db.update(complaintTypesTable).set(updates).where(eq(complaintTypesTable.id, id));
     const [type] = await db.select().from(complaintTypesTable).where(eq(complaintTypesTable.id, id)).limit(1);
     if (!type) { res.status(404).json({ error: "Not Found" }); return; }

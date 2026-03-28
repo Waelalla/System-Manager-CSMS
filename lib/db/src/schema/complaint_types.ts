@@ -9,6 +9,7 @@ export const complaintTypesTable = pgTable("complaint_types", {
   category: text("category"),
   is_active: boolean("is_active").notNull().default(true),
   fields: jsonb("fields").notNull().default([]),
+  success_message: text("success_message"),
 });
 
 export const insertComplaintTypeSchema = createInsertSchema(complaintTypesTable).omit({ id: true });

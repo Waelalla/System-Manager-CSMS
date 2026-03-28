@@ -81,6 +81,9 @@ async function seed() {
     { key: "company_name_en", value: "Customer Service Management System" },
     { key: "default_language", value: "ar" },
     { key: "theme", value: "dark" },
+    { key: "primary_color", value: "#6366f1" },
+    { key: "company_logo", value: "" },
+    { key: "public_form_fields", value: ["name", "phone", "complaint_type", "date"] },
   ];
   for (const setting of SETTINGS) {
     const existing = await db.select().from(settingsTable).where(eq(settingsTable.key, setting.key)).limit(1);

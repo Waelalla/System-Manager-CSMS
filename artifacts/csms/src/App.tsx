@@ -10,6 +10,7 @@ import { TranslationProvider } from "@/lib/i18n";
 import { AppLayout } from "@/components/layout";
 
 import Login from "@/pages/login";
+import PublicPortal from "@/pages/public-portal";
 import Dashboard from "@/pages/dashboard";
 import Customers from "@/pages/customers";
 import Complaints from "@/pages/complaints";
@@ -40,7 +41,7 @@ function AuthenticatedRoutes() {
   return (
     <AppLayout>
       <Switch>
-        <Route path="/" component={Dashboard} />
+        <Route path="/dashboard" component={Dashboard} />
         <Route path="/customers" component={Customers} />
         <Route path="/complaints" component={Complaints} />
         <Route path="/complaints/new" component={ComplaintNew} />
@@ -65,6 +66,7 @@ function Router() {
 
   return (
     <Switch>
+      <Route path="/" component={PublicPortal} />
       <Route path="/login" component={Login} />
       <Route path="/copyright" component={Copyright} />
       <Route component={AuthenticatedRoutes} />

@@ -50,7 +50,7 @@ router.put("/:id", requireAuth, requireRole("Manager"), async (req, res) => {
     if (!existing) { res.status(404).json({ error: "Not Found" }); return; }
 
     const updates: Record<string, unknown> = {};
-    if (name) updates.name = name;
+    if (name && !LOCKED_ROLES.includes(existing.name)) updates.name = name;
 
     if (permissions !== undefined) {
       if (LOCKED_ROLES.includes(existing.name)) {

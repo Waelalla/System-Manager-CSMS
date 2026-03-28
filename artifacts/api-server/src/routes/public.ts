@@ -120,6 +120,28 @@ router.post("/complaints", upload.single("file"), async (req, res) => {
       fieldsValues["_uploaded_file_name"] = req.file.originalname;
     }
 
+    const typeFields = Array.isArray(type.fields)
+      ? (type.fields as { key: string; label: string; type: string; required?: boolean }[])
+      : [];
+    const missingFields: string[] = [];
+    for (const field of typeFields) {
+      if (field.required) {
+        const val = fieldsValues[field.key];
+        if (val === undefined || val === null || String(val).trim() === "") {
+          missingFields.push(field.label ?? field.key);
+        }
+      }
+    }
+    if (missingFields.length > 0) {
+      return res.status(400).json({
+        error: `الحقول التالية مطلوبة: ${missingFields.join("، ")}`,
+      });
+    }
+
+    if (body.date) {
+      fieldsValues["_incident_date"] = body.date;
+    }
+
     let customerId: number;
     const phoneVal = body.customer_phone?.trim();
     const emailVal = body.customer_email?.trim();
@@ -164,8 +186,6 @@ router.post("/complaints", upload.single("file"), async (req, res) => {
       customerId = newCustomer.id;
     }
 
-    const complaintDate = body.date ? new Date(body.date) : new Date();
-
     const [complaint] = await db
       .insert(complaintsTable)
       .values({
@@ -178,7 +198,6 @@ router.post("/complaints", upload.single("file"), async (req, res) => {
           `شكوى عبر البوابة الإلكترونية - ${type.name}`,
         fields_values: fieldsValues,
         status: "جديدة",
-        created_at: complaintDate,
       })
       .returning({ id: complaintsTable.id });
 

@@ -549,7 +549,7 @@ export default function PublicPortal() {
       </div>
       <Link
         href="/login"
-        className="fixed bottom-4 left-4 text-xs text-gray-700 hover:text-gray-500 transition-colors z-50"
+        className="fixed bottom-4 right-4 text-xs text-gray-700 hover:text-gray-500 transition-colors z-50"
       >
         الإدارة
       </Link>

@@ -68,7 +68,83 @@ function useDeleteRatingQuestion() {
   });
 }
 
-type Section = 'company' | 'users' | 'types' | 'branches' | 'import' | 'email' | 'points' | 'appearance' | 'security' | 'rating' | 'portal' | 'products';
+function useUpdateRolePermissions() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, permissions }: { id: number; permissions: string[] }) => {
+      const token = localStorage.getItem('access_token');
+      const res = await fetch(`/api/roles/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ permissions }),
+      });
+      if (!res.ok) throw new Error('فشل الحفظ');
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['listRoles'] }),
+  });
+}
+
+type Section = 'company' | 'users' | 'types' | 'branches' | 'import' | 'email' | 'points' | 'appearance' | 'security' | 'rating' | 'portal' | 'products' | 'roles';
+
+type PermissionKey =
+  | "view:dashboard" | "view:complaints" | "create:complaints" | "assign:complaints"
+  | "resolve:complaints" | "escalate:complaints" | "view:customers" | "create:customers"
+  | "view:invoices" | "create:invoices" | "view:follow-ups" | "create:follow-ups"
+  | "view:analytics" | "view:reports" | "view:employees-performance"
+  | "manage:users" | "manage:roles" | "manage:settings" | "manage:branches"
+  | "manage:products" | "manage:complaint-types" | "import:data" | "export:data";
+
+const PERMISSION_GROUPS: { label: string; permissions: PermissionKey[] }[] = [
+  {
+    label: "لوحة القيادة والتقارير",
+    permissions: ["view:dashboard", "view:analytics", "view:reports", "view:employees-performance"],
+  },
+  {
+    label: "الشكاوى",
+    permissions: ["view:complaints", "create:complaints", "assign:complaints", "resolve:complaints", "escalate:complaints"],
+  },
+  {
+    label: "العملاء",
+    permissions: ["view:customers", "create:customers"],
+  },
+  {
+    label: "الفواتير والمتابعات",
+    permissions: ["view:invoices", "create:invoices", "view:follow-ups", "create:follow-ups"],
+  },
+  {
+    label: "الإدارة",
+    permissions: ["manage:users", "manage:roles", "manage:settings", "manage:branches", "manage:products", "manage:complaint-types", "import:data", "export:data"],
+  },
+];
+
+const PERMISSION_LABELS: Record<PermissionKey, string> = {
+  "view:dashboard": "عرض لوحة القيادة",
+  "view:complaints": "عرض الشكاوى",
+  "create:complaints": "إنشاء شكاوى",
+  "assign:complaints": "تعيين الشكاوى",
+  "resolve:complaints": "حل الشكاوى",
+  "escalate:complaints": "تصعيد الشكاوى",
+  "view:customers": "عرض العملاء",
+  "create:customers": "إنشاء عملاء",
+  "view:invoices": "عرض الفواتير",
+  "create:invoices": "إنشاء فواتير",
+  "view:follow-ups": "عرض المتابعات",
+  "create:follow-ups": "إنشاء متابعات",
+  "view:analytics": "عرض التحليلات",
+  "view:reports": "عرض التقارير",
+  "view:employees-performance": "عرض أداء الموظفين",
+  "manage:users": "إدارة المستخدمين",
+  "manage:roles": "إدارة الأدوار",
+  "manage:settings": "إدارة الإعدادات",
+  "manage:branches": "إدارة الفروع",
+  "manage:products": "إدارة المنتجات",
+  "manage:complaint-types": "إدارة أنواع الشكاوى",
+  "import:data": "استيراد البيانات",
+  "export:data": "تصدير البيانات",
+};
+
+const LOCKED_ROLE_NAMES = ["Manager", "Manager/Voter"];
 
 interface ImportResult {
   added_customers?: number;
@@ -173,6 +249,11 @@ export default function Settings() {
   const { mutateAsync: createRatingQ, isPending: addingRQ } = useCreateRatingQuestion();
   const { mutateAsync: deleteRatingQ } = useDeleteRatingQuestion();
   const [newQuestionText, setNewQuestionText] = useState('');
+
+  const { mutateAsync: updateRolePermissions, isPending: savingRolePerms } = useUpdateRolePermissions();
+  const [expandedRoles, setExpandedRoles] = useState<Set<number>>(new Set());
+  const [pendingPermissions, setPendingPermissions] = useState<Record<number, string[]>>({});
+  const [savingRoleId, setSavingRoleId] = useState<number | null>(null);
 
   const handleAddRatingQuestion = async () => {
     if (!newQuestionText.trim()) return;
@@ -585,6 +666,7 @@ export default function Settings() {
     { id: 'company' as Section, label: 'معلومات الشركة', icon: Building2 },
     { id: 'portal' as Section, label: 'بوابة الشكاوى العامة', icon: Globe },
     { id: 'users' as Section, label: 'إدارة المستخدمين', icon: Users },
+    { id: 'roles' as Section, label: 'صلاحيات الأدوار', icon: Shield },
     { id: 'types' as Section, label: 'أنواع الشكاوى', icon: Tags },
     { id: 'products' as Section, label: 'المنتجات', icon: Package },
     { id: 'branches' as Section, label: 'الفروع', icon: GitBranch },
@@ -1705,6 +1787,177 @@ export default function Settings() {
                 </div>
               </div>
             )}
+
+            {section === 'roles' && (() => {
+              const allRoles = (rolesData as unknown as { data?: { id: number; name: string; permissions: string[] }[] })?.data ?? [];
+              const editableRoles = allRoles.filter(r => !LOCKED_ROLE_NAMES.includes(r.name));
+              const lockedRoles = allRoles.filter(r => LOCKED_ROLE_NAMES.includes(r.name));
+
+              const getRolePerms = (role: { id: number; permissions: string[] }): string[] =>
+                pendingPermissions[role.id] ?? role.permissions ?? [];
+
+              const togglePerm = (roleId: number, perm: string, currentPerms: string[]) => {
+                const next = currentPerms.includes(perm)
+                  ? currentPerms.filter(p => p !== perm)
+                  : [...currentPerms, perm];
+                setPendingPermissions(prev => ({ ...prev, [roleId]: next }));
+              };
+
+              const handleSaveRole = async (role: { id: number; name: string; permissions: string[] }) => {
+                setSavingRoleId(role.id);
+                try {
+                  await updateRolePermissions({ id: role.id, permissions: getRolePerms(role) });
+                  setPendingPermissions(prev => { const next = { ...prev }; delete next[role.id]; return next; });
+                  toast({ title: 'تم الحفظ', description: `تم تحديث صلاحيات دور "${role.name}"` });
+                } catch {
+                  toast({ title: 'خطأ', description: 'فشل في حفظ الصلاحيات', variant: 'destructive' });
+                } finally { setSavingRoleId(null); }
+              };
+
+              return (
+                <div className="space-y-6">
+                  <div>
+                    <h2 className="text-xl font-bold flex items-center gap-2">
+                      <Shield className="w-5 h-5 text-primary" /> صلاحيات الأدوار
+                    </h2>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      حدّد الصلاحيات المتاحة لكل دور. ستُطبق التغييرات عند تسجيل دخول الموظف مرة أخرى.
+                    </p>
+                  </div>
+
+                  {lockedRoles.length > 0 && (
+                    <div className="border border-amber-500/20 bg-amber-500/5 rounded-2xl p-4 space-y-2">
+                      <p className="text-sm font-semibold text-amber-400 flex items-center gap-2">
+                        <Shield className="w-4 h-4" /> أدوار مقفلة — جميع الصلاحيات ممنوحة دائماً
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {lockedRoles.map(r => (
+                          <span key={r.id} className="bg-amber-500/10 text-amber-300 text-xs font-medium px-3 py-1 rounded-full border border-amber-500/20">
+                            {r.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {editableRoles.length === 0 && (
+                    <p className="text-sm text-muted-foreground py-8 text-center">لا توجد أدوار قابلة للتعديل</p>
+                  )}
+
+                  <div className="space-y-3">
+                    {editableRoles.map(role => {
+                      const isExpanded = expandedRoles.has(role.id);
+                      const perms = getRolePerms(role);
+                      const hasChanges = pendingPermissions[role.id] !== undefined;
+                      const isEmpty = perms.length === 0;
+                      const isSaving = savingRoleId === role.id;
+
+                      return (
+                        <div key={role.id} className={`border rounded-2xl overflow-hidden transition-colors ${isEmpty ? 'border-red-500/30 bg-red-500/5' : 'border-border/50 bg-card'}`}>
+                          <button
+                            className="w-full flex items-center justify-between px-5 py-4 hover:bg-muted/20 transition-colors"
+                            onClick={() => setExpandedRoles(prev => {
+                              const next = new Set(prev);
+                              if (next.has(role.id)) next.delete(role.id);
+                              else next.add(role.id);
+                              return next;
+                            })}
+                          >
+                            <div className="flex items-center gap-3">
+                              <Shield className="w-4 h-4 text-primary" />
+                              <span className="font-semibold text-foreground">{role.name}</span>
+                              {isEmpty && (
+                                <span className="text-xs text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/20">
+                                  لا توجد صلاحيات
+                                </span>
+                              )}
+                              {hasChanges && !isEmpty && (
+                                <span className="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
+                                  تغييرات غير محفوظة
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-muted-foreground">{perms.length} صلاحية</span>
+                              <span className={`text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`}>▼</span>
+                            </div>
+                          </button>
+
+                          {isExpanded && (
+                            <div className="px-5 pb-5 border-t border-border/30 space-y-5 pt-4">
+                              {PERMISSION_GROUPS.map(group => (
+                                <div key={group.label} className="space-y-2">
+                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{group.label}</p>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {group.permissions.map(perm => {
+                                      const checked = perms.includes(perm);
+                                      return (
+                                        <label
+                                          key={perm}
+                                          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border cursor-pointer transition-colors ${
+                                            checked ? 'border-primary/30 bg-primary/5' : 'border-border/30 hover:bg-muted/20'
+                                          }`}
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={checked}
+                                            onChange={() => togglePerm(role.id, perm, perms)}
+                                            className="accent-primary w-4 h-4 flex-shrink-0"
+                                          />
+                                          <span className="text-sm">{PERMISSION_LABELS[perm]}</span>
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ))}
+
+                              <div className="pt-2 flex items-center gap-3 justify-between">
+                                {isEmpty && (
+                                  <p className="text-xs text-red-400 flex items-center gap-1">
+                                    <AlertCircle className="w-3.5 h-3.5" /> لا توجد صلاحيات — الموظفون بهذا الدور لن يتمكنوا من الوصول
+                                  </p>
+                                )}
+                                <div className="flex gap-2 mr-auto">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="rounded-xl h-8 text-xs"
+                                    onClick={() => {
+                                      const allPerms = PERMISSION_GROUPS.flatMap(g => g.permissions) as string[];
+                                      setPendingPermissions(prev => ({ ...prev, [role.id]: allPerms }));
+                                    }}
+                                  >
+                                    تحديد الكل
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="rounded-xl h-8 text-xs text-red-400 border-red-400/30 hover:bg-red-400/10"
+                                    onClick={() => setPendingPermissions(prev => ({ ...prev, [role.id]: [] }))}
+                                  >
+                                    مسح الكل
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    disabled={isSaving || savingRolePerms}
+                                    onClick={() => handleSaveRole(role)}
+                                    className="rounded-xl h-8 text-xs bg-primary hover:bg-primary/90 text-white px-4"
+                                  >
+                                    <Save className="w-3 h-3 mr-1" />
+                                    {isSaving ? 'جاري الحفظ...' : 'حفظ الصلاحيات'}
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
 
             {section === 'import' && (
               <div className="space-y-6">

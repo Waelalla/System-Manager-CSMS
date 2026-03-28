@@ -16,6 +16,18 @@ router.get("/", requireAuth, requireRole("Manager", "Manager/Voter"), async (req
   }
 });
 
+router.get("/:id", requireAuth, requireRole("Manager", "Manager/Voter"), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id as string);
+    const [role] = await db.select().from(rolesTable).where(eq(rolesTable.id, id)).limit(1);
+    if (!role) { res.status(404).json({ error: "Not Found" }); return; }
+    res.json(role);
+  } catch (err) {
+    req.log.error({ err }, "Get role error");
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
 router.post("/", requireAuth, requireRole("Manager"), async (req, res) => {
   try {
     const { name, permissions } = req.body;
